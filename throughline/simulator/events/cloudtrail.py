@@ -10,7 +10,6 @@ roles from AWS-internal / VPN IPs carry ``anomalous: false``.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
 
 from throughline.simulator import storyline_constants as S
 from throughline.simulator.common import NOW, at, rng, stable_hex, ts

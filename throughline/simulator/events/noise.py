@@ -11,7 +11,7 @@ from __future__ import annotations
 from throughline.simulator import storyline_constants as S
 from throughline.simulator.common import at, pick, rng
 from throughline.simulator.events import processes
-from throughline.simulator.events.ctx import Ctx, add_alert, aid_of, falcon_raw, involves
+from throughline.simulator.events.ctx import Ctx, add_alert, falcon_raw, involves
 from throughline.simulator.events.network import connected_to, doc_public_ips, domain_node, ip_node
 
 # category sizes (see the section-4 vs section-7 note in the module/report)
@@ -332,7 +332,7 @@ def add_background_activity(ctx: Ctx, n_trees: int) -> dict:
             parent = proc
             leaf = proc
             p_count += 1
-        if leaf and r.random() < 0.5:
+        if leaf and r.random() < 0.62:
             fsha = processes.fake_sha256("bg-telemetry", i)
             fnode = processes.file_node(ctx, sha256=fsha, file_name=f"artifact_{i % 500}.dat",
                                         file_path=f"/var/tmp/artifact_{i % 500}.dat" if osf != "windows"

@@ -95,11 +95,6 @@ def domain_id(fqdn: str) -> str:
     return f"domain:dns:{fqdn}"
 
 
-def logon_id(aid: str, logon_ts: str, principal_id: str) -> str:
-    who = principal_id.split(":")[-1]
-    return f"logon:falcon:{aid}:{epoch(logon_ts)}:{who}"
-
-
 # --------------------------------------------------------------------- alert constructor
 
 

@@ -288,7 +288,6 @@ def synthesize_fleet(existing: Inventory, target_endpoints: int = FLEET_ENDPOINT
 
     for i in range(n_wks):
         h = stable_hex("wks", i, length=8)
-        aid = f"aid-w{h}"
         eid = f"endpoint:falcon:aid-w{h}"
         dept = _pick_weighted(r, _DEPARTMENTS)
         first = r.choice(["alex", "sam", "jordan", "taylor", "morgan", "casey", "riley", "jamie", "avery",

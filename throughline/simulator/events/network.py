@@ -8,25 +8,9 @@ deterministic background pool so WAF/IDS/general-EDR noise and background CloudT
 """
 from __future__ import annotations
 
-from typing import Any
-
 from throughline.simulator import storyline_constants as S
-from throughline.simulator.common import ago, rng
+from throughline.simulator.common import ago
 from throughline.simulator.events.ctx import Ctx, domain_id, ip_id
-
-# Fictional geolocation/ASN pool for background external IPs (documentation ranges only).
-_ASN_POOL = [
-    ("AS64500", "Stratovault Hosting (fictional)", "NL"),
-    ("AS64496", "Documentation Cloud (fictional)", "US"),
-    ("AS64497", "Meridian Broadband (fictional)", "US"),
-    ("AS64498", "Kestrel Telecom (fictional)", "DE"),
-    ("AS64499", "Aurora Datacenters (fictional)", "SG"),
-    ("AS64501", "Northwind ISP (fictional)", "GB"),
-    ("AS64502", "Cirrus Transit (fictional)", "FR"),
-    ("AS64511", "Brackwater Networks (fictional)", "RU"),
-    ("AS64512", "Larkspur Corporate VPN", "US"),
-    ("AS64513", "Solano Mobile (fictional)", "BR"),
-]
 
 
 def is_private_ip(addr: str) -> bool:
@@ -111,31 +95,3 @@ def doc_public_ips(n: int) -> list[str]:
     return out
 
 
-def background_pool(ctx: Ctx, n_ips: int, n_domains: int) -> tuple[list[str], list[str]]:
-    """A deterministic pool of benign-looking external IPs and domains for noise to draw from."""
-    r = rng("events.network.pool")
-    ips: list[str] = []
-    for i in range(n_ips):
-        # spread across documentation ranges, avoiding the named campaign addresses
-        block = r.choice(["192.0.2", "198.51.100", "203.0.113"])
-        octet = r.randint(2, 254)
-        addr = f"{block}.{octet}"
-        if addr in (S.ATTACKER_EGRESS_IP, S.C2_IP, S.SALTWORKS_IP, S.VPN_EGRESS_IP):
-            addr = f"192.0.2.{(octet % 250) + 2}"
-        asn, org, country = r.choice(_ASN_POOL[1:8])
-        nid = ip_node(ctx, addr, source="ids-sim", asn=asn, asn_org=org, country=country,
-                      first_seen=ago(days=r.randint(1, 120)))
-        ips.append(nid)
-    words_a = ["cdn", "assets", "static", "api", "mail", "vpn", "sync", "update", "metrics", "cloud",
-               "edge", "img", "files", "auth", "gateway", "proxy", "node", "app"]
-    words_b = ["telemetry", "fastcache", "netscan", "bluepeak", "orionhost", "quicknode", "datamesh",
-               "greyfox", "longtail", "brightpath", "stormcdn", "vantage"]
-    tlds = ["net", "com", "io", "co", "cloud"]
-    domains: list[str] = []
-    for i in range(n_domains):
-        fqdn = f"{r.choice(words_a)}-{r.choice(words_b)}.{r.choice(tlds)}"
-        nid = domain_node(ctx, fqdn, source="falcon-sim", registered_days_ago=r.randint(30, 3000),
-                          first_seen=ago(days=r.randint(1, 200)))
-        domains.append(nid)
-    # de-duplicate while preserving order (pool ids may collide on random collisions)
-    return list(dict.fromkeys(ips)), list(dict.fromkeys(domains))

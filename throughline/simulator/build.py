@@ -64,6 +64,8 @@ def merge_and_validate(out: Path) -> ContextGraph:
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     owner: dict[str, str] = {}
+    by_id: dict[str, dict[str, Any]] = {}
+    merged: dict[str, int] = {}
     problems: list[str] = []
     for stage, (nfile, efile) in STAGE_FILES.items():
         npath, epath = graph_dir / nfile, graph_dir / efile
@@ -71,9 +73,21 @@ def merge_and_validate(out: Path) -> ContextGraph:
             raise BuildError(f"stage {stage} did not produce {nfile}/{efile}")
         for rec in read_jsonl(npath):
             if rec["id"] in owner:
-                problems.append(f"duplicate id {rec['id']} from {stage} (already from {owner[rec['id']]})")
+                # The same entity (an IP address, a domain, a technique) may legitimately be emitted by two stages.
+                # Merge when the labels agree; a label conflict is a real error.
+                first = by_id[rec["id"]]
+                if first["label"] != rec["label"]:
+                    problems.append(f"duplicate id {rec['id']} with conflicting labels {first['label']} ({owner[rec['id']]}) vs {rec['label']} ({stage})")
+                    continue
+                merged_props = dict(rec.get("props") or {})
+                merged_props.update({k: v for k, v in (first.get("props") or {}).items() if v is not None})
+                first["props"] = merged_props
+                first["first_seen"] = min(first.get("first_seen") or rec.get("first_seen") or "", rec.get("first_seen") or first.get("first_seen") or "") or first.get("first_seen")
+                first["last_seen"] = max(first.get("last_seen") or "", rec.get("last_seen") or "") or first.get("last_seen")
+                merged[rec["id"]] = merged.get(rec["id"], 1) + 1
                 continue
             owner[rec["id"]] = stage
+            by_id[rec["id"]] = rec
             problems.extend(validate_node(rec))
             nodes.append(rec)
         edges.extend(read_jsonl(epath))
@@ -96,6 +110,8 @@ def merge_and_validate(out: Path) -> ContextGraph:
     if problems:
         preview = "\n  ".join(problems[:40])
         raise BuildError(f"{len(problems)} validation problems:\n  {preview}")
+    if merged:
+        log.info("merged %d node ids emitted by more than one stage", len(merged))
     graph = ContextGraph.from_records(nodes, kept_edges)
     return graph
 
