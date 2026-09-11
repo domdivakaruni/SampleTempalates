@@ -330,6 +330,11 @@ def build_stages(ctx: AnalyticsContext, path: list[str], storyline_id: str | Non
             alert_ids=alerts + events, time=min(times) if times else None, summary=_stage_summary(ctx, nid, etype, alerts, events, edata),
         ))
         prev = nid
+    # A hop with no telemetry of its own (for example the VM an endpoint resolves to) inherits the time of the
+    # stage that led to it, so the timeline never shows a gap in the middle of the chain.
+    for idx in range(1, len(stages)):
+        if stages[idx].time is None:
+            stages[idx].time = stages[idx - 1].time
     return stages
 
 

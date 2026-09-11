@@ -544,7 +544,8 @@ def test_containment_simulation(engine: AnalyticsEngine, graph: ContextGraph) ->
     assert C.APP_SETTLEMENT_SFTP in {b.node_id for b in sim.breaks}
     assert any(C.CRED_PROD_KEY_ID in r and "expired" in r for r in sim.residual_risks)
     assert any("trust policy" in r.lower() for r in sim.residual_risks)
-    assert any("tighten_trust_policy" in r for r in sim.recommendations)
+    assert any("trust policy" in r.lower() for r in sim.recommendations)
+    assert all(r[:1].isupper() for r in sim.recommendations if r), sim.recommendations
     assert any("exfiltrated" in r for r in sim.recommendations)
     assert sim.fragment.meta["cut_edges"] and set(sim.fragment.focus) == {C.EP_BASTION, C.BASTION_ROLE}
     _check_ids(graph, sim.crown_jewels_protected + [b.node_id for b in sim.breaks] + sim.target_ids, "containment ids")

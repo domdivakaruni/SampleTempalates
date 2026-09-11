@@ -312,7 +312,22 @@ def _recommendations(ctx: AnalyticsContext, plan: _Plan, contained: list[str], p
         recs.append("preserve forensic state of the isolated host (memory, shell history, IMDS access logs) before rebuilding")
     if not recs:
         recs.append("no additional actions required beyond the simulated ones")
-    return recs
+    return [_humanize_recommendation(r) for r in recs]
+
+
+def _humanize_recommendation(text: str) -> str:
+    """Turn action identifiers into sentences and capitalise the first letter."""
+    for prefix, sentence in (
+        ("tighten_trust_policy on ", "Tighten the trust policy of {} so only the intended principals can assume it"),
+        ("revoke_sessions on ", "Revoke the active sessions of {}"),
+        ("rotate_role_credentials on ", "Rotate the credentials of {}"),
+        ("block_ip on ", "Block {} at the perimeter and in cloud IAM conditions"),
+        ("disable_user on ", "Disable {} and reset their sessions"),
+        ("isolate_endpoint on ", "Isolate {} with the EDR network containment action"),
+    ):
+        if text.startswith(prefix):
+            return sentence.format(text[len(prefix):])
+    return text[:1].upper() + text[1:] if text else text
 
 
 def _fragment(ctx: AnalyticsContext, plan: _Plan, contained: list[str], story_nodes: list[str], protected: list[str], breaks: list[BreakItem]) -> GraphFragment:
