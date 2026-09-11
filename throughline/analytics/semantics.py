@@ -362,14 +362,28 @@ def event_techniques(attrs: dict[str, Any] | None) -> list[str]:
     return list(CLOUD_EVENT_TECHNIQUES.get(name, []))
 
 
+# "Valid Accounts" techniques appear at every stage of an intrusion (ATT&CK lists them under four tactics), so they
+# say nothing about *where* in the kill chain an alert sits. They never determine a stage on their own.
+STAGE_NEUTRAL_TECHNIQUES: frozenset[str] = frozenset({"T1078", "T1078.001", "T1078.002", "T1078.003", "T1078.004"})
+
+
 def stage_number(technique_ids: Iterable[str], tactic: str | None = None) -> int:
-    """Primary kill-chain stage (1-7) of an alert: its tactic if known, else its first known technique."""
-    if tactic and tactic in TACTIC_STAGE:
-        return TACTIC_STAGE[tactic]
-    for t in technique_ids:
+    """Primary kill-chain stage (1-7) of an alert: its first known non-neutral technique, else its tactic.
+
+    Returns 0 when the only techniques are stage-neutral (the caller then infers the stage from the surrounding
+    activity) or when nothing is known.
+    """
+    techs = [str(t) for t in technique_ids]
+    for t in techs:
+        if t in STAGE_NEUTRAL_TECHNIQUES:
+            continue
         info = TECHNIQUES.get(t)
         if info:
             return int(info["kill_chain_stage"])
+    if techs and all(t in STAGE_NEUTRAL_TECHNIQUES or t not in TECHNIQUES for t in techs):
+        return 0
+    if tactic and tactic in TACTIC_STAGE:
+        return TACTIC_STAGE[tactic]
     return 0
 
 
@@ -380,6 +394,8 @@ def stage_label(stage: int) -> str:
 def stages_covered(technique_ids: Iterable[str]) -> set[int]:
     out: set[int] = set()
     for t in technique_ids:
+        if t in STAGE_NEUTRAL_TECHNIQUES:
+            continue
         info = TECHNIQUES.get(t)
         if info:
             out.add(int(info["kill_chain_stage"]))

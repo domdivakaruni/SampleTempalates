@@ -65,7 +65,7 @@ export function ReportDetail() {
             </div>
           </Panel>
           <Panel title={`Indicators (${q.data.indicators.length})`}>
-            <IndicatorsTable indicators={q.data.indicators} matches={[]} />
+            <IndicatorsTable indicators={q.data.indicators} matches={q.data.matches ?? []} />
           </Panel>
           <Panel title={`Techniques (${q.data.techniques.length})`}>
             <TechniqueChips techniques={q.data.techniques} seen={new Set(impact.ttp_overlap ?? [])} />

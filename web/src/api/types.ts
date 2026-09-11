@@ -548,6 +548,7 @@ export interface ActorDetailOut {
 export interface ReportListOut { items: NodeOut[] }
 export interface ReportDetailOut {
   report: NodeOut
+  matches?: TIMatch[]
   actors: NodeOut[]
   campaigns: NodeOut[]
   malware: NodeOut[]

@@ -61,8 +61,17 @@ def stats(store: Any = Depends(require_store)) -> Any:
 
 
 @router.get("/schema")
-def schema() -> dict[str, Any]:
+def schema(request: Request) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
+    store = getattr(getattr(request.app.state, "runtime", None), "store", None)
+    if store is not None and hasattr(store, "schema_summary"):
+        try:
+            summary = store.schema_summary() or {}
+            extras = {k: summary[k] for k in ("backend", "dialect", "notes", "key_properties", "example_queries") if k in summary}
+        except Exception:  # pragma: no cover - the registry view below is always available
+            extras = {}
     return {
+        **extras,
         "categories": dict(CATEGORIES),
         "labels": [
             {

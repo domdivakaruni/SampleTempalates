@@ -22,7 +22,7 @@ export function KpiTiles({ kpis, coverage }: { kpis: DashboardKpis; coverage: Da
         hint="reachable from an active alert"
         onClick={() => navigate('/alerts?rcj=1')}
       />
-      <KpiTile label="Exposed + exploited" value={fmtNum(kpis.internet_exposed_exploited)} tone={kpis.internet_exposed_exploited ? 'warn' : 'neutral'} hint="internet-facing hosts with an actively exploited CVE" onClick={() => navigate('/threat-intel?tab=exposure')} />
+      <KpiTile label="Exploited exposure" value={fmtNum(kpis.internet_exposed_exploited)} tone={kpis.internet_exposed_exploited ? 'warn' : 'neutral'} hint="internet-facing hosts with an actively exploited CVE" onClick={() => navigate('/threat-intel?tab=exposure')} />
       <KpiTile
         label="EDR coverage"
         value={`${fmtNum(kpis.endpoint_coverage_pct, kpis.endpoint_coverage_pct % 1 ? 1 : 0)}%`}

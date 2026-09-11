@@ -115,7 +115,7 @@ def test_stats(client: TestClient) -> None:
 
 def test_schema(client: TestClient) -> None:
     body = _ok(client.get(f"{API}/schema"))
-    assert set(body) == {"categories", "labels", "edge_types"}
+    assert {"categories", "labels", "edge_types"} <= set(body)  # stores may add backend, dialect, notes, example_queries
     labels = {lbl["name"]: lbl for lbl in body["labels"]}
     assert {"Alert", "Endpoint", "VirtualMachine", "IamRole", "StorageBucket", "ThreatActor"} <= set(labels)
     for lbl in labels.values():

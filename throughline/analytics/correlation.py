@@ -449,6 +449,31 @@ def _member_stage(ctx: AnalyticsContext, m: str) -> int:
     return sem.event_stage(g.node(m))
 
 
+def _primary_stages(ctx: AnalyticsContext, members: list[str], times: dict[str, Any]) -> dict[str, int]:
+    """Primary kill-chain stage per member. Members whose only techniques are stage-neutral (Valid Accounts) inherit
+    the stage of the closest earlier member in time, so an "API calls from a new location" alert lands next to the
+    credential theft or collection it belongs to instead of in Initial Access."""
+    ordered = sorted(members, key=lambda m: (times.get(m) is None, times.get(m) or "", m))
+    out: dict[str, int] = {}
+    last = 0
+    pending: list[str] = []
+    for m in ordered:
+        st = _member_stage(ctx, m)
+        if st:
+            out[m] = st
+            last = st
+            for p_ in pending:  # members before the first staged one inherit forward
+                out[p_] = st
+            pending = []
+        elif last:
+            out[m] = last
+        else:
+            pending.append(m)
+    for p_ in pending:
+        out[p_] = 5  # nothing to inherit from: treat as privilege/lateral activity
+    return out
+
+
 def _member_techniques(ctx: AnalyticsContext, m: str) -> list[str]:
     g = ctx.graph
     if g.label_of(m) == "Alert":
@@ -556,10 +581,11 @@ def _materialize_storyline(ctx: AnalyticsContext, members: list[str], times: dic
     all_techs: list[str] = []
     for m in members:
         all_techs.extend(_member_techniques(ctx, m))
-    covered = sem.stages_covered(all_techs) | {s for s in (_member_stage(ctx, m) for m in members) if s}
+    primary_stage = _primary_stages(ctx, members, times)
+    covered = sem.stages_covered(all_techs) | {s for s in primary_stage.values() if s}
     stages_json: list[dict[str, Any]] = []
     for s in sorted(covered):
-        s_members = [m for m in members if _member_stage(ctx, m) == s or s in sem.stages_covered(_member_techniques(ctx, m))]
+        s_members = [m for m in members if primary_stage.get(m) == s or s in sem.stages_covered(_member_techniques(ctx, m))]
         s_techs = sorted({t for m in s_members for t in _member_techniques(ctx, m) if t in sem.TECHNIQUES and int(sem.TECHNIQUES[t]["kill_chain_stage"]) == s})
         node_ids: list[str] = []
         for m in s_members:

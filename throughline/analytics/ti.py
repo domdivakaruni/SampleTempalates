@@ -790,6 +790,11 @@ def ti_report(ctx: AnalyticsContext, report_id: str, summarize: Callable[[str], 
         "malware": [g.node_out(m) for m in by_label["Malware"]],
         "cves": [g.node_out(c) for c in by_label["Vulnerability"]],
         "indicators": [g.node_out(i) for i in by_label["Indicator"]],
+        "matches": [
+            _match(ctx, ind, src, d.get("confidence"))
+            for ind in by_label["Indicator"]
+            for src, d in g.in_edges(ind, ("MATCHES_IOC",))
+        ],
         "techniques": [g.node_out(t) for t in by_label["AttackTechnique"]],
         "impact": {
             "matched_alerts": [summarize(a) for a in alerts] if summarize else [g.node_out(a) for a in alerts],

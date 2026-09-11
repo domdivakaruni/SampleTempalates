@@ -246,8 +246,18 @@ class AnalyticsEngine:
             return frag
         nodes = [alert_id]
         if anchor:
-            hop2 = g.k_hop(alert_id, depth=2, max_nodes=60)
-            nodes += sorted(hop2, key=lambda n: (hop2[n], n))
+            hop2 = g.k_hop(alert_id, depth=2, max_nodes=120)
+            # keep every 1-hop node, but cap the 2-hop fan-in per label (dozens of users with access to a public
+            # bucket say nothing new); prefer nodes that carry alerts or are sensitive
+            per_label: dict[str, int] = {}
+            ranked = sorted(hop2, key=lambda n: (hop2[n], not self._interesting(n), n))
+            for n in ranked:
+                lbl = g.label_of(n) or ""
+                if hop2[n] >= 2:
+                    if per_label.get(lbl, 0) >= 6:
+                        continue
+                    per_label[lbl] = per_label.get(lbl, 0) + 1
+                nodes.append(n)
         path_outs = []
         if br is not None:
             for r in br.crown_jewels[:5]:
@@ -256,6 +266,14 @@ class AnalyticsEngine:
         frag = g.fragment(nodes, highlight_ids={alert_id} | {r.node.id for r in (br.crown_jewels if br else [])}, focus=[alert_id], layout_hint="neighborhood", max_nodes=150, paths=path_outs)
         frag.meta = {"kind": "neighborhood_plus_blast"}
         return frag
+
+    def _interesting(self, node_id: str) -> bool:
+        """Nodes worth keeping when a neighborhood is trimmed: alerts, storyline members, sensitive or exposed assets."""
+        g = self.graph
+        a = g.node(node_id) or {}
+        if a.get("label") in ("Alert", "Storyline", "Credential", "Indicator", "ThreatActor", "Campaign"):
+            return True
+        return bool(a.get("crown_jewel") or a.get("storyline_id") or a.get("exposure") == "internet" or a.get("is_admin"))
 
     # ------------------------------------------------------------------ graph analytics
 
