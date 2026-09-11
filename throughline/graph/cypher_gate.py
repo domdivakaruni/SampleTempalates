@@ -16,7 +16,10 @@ so ``WHERE n.title CONTAINS 'CREATE'`` passes):
 * every variable-length pattern has an explicit upper bound ``<= max_var_length`` (``[*]``, ``[*2..]`` and
   ``[*1..9]`` are refused; Kuzu's ``[e* SHORTEST 1..3]`` and Neo4j quantified paths ``{1,3}`` are handled);
 * the final ``LIMIT`` is clamped to ``row_limit`` (or injected when missing); ``LIMIT $param`` is refused
-  because the gate cannot see parameter values.
+  because the gate cannot see parameter values;
+* literal ``range(a, b[, step])`` calls may produce at most ``max_range_size`` values: the embedded engine
+  materialises list literals before its interrupt flag is checked, so ``UNWIND range(1, 3000000)`` ignores the
+  query timeout for tens of seconds (measured on LadybugDB 0.20.4) while scans and traversals interrupt promptly.
 
 The normalized statement (comments stripped, trailing ``;`` removed, ``LIMIT`` clamped) is returned.
 """
@@ -51,6 +54,7 @@ _VARLEN_BOUNDS_RE = re.compile(
 )
 _QPP_BRACES_RE = re.compile(r"\)\s*\{\s*(\d*)\s*(,?)\s*(\d*)\s*\}")
 _QPP_SYMBOL_RE = re.compile(r"\)\s*([+*])")
+_RANGE_RE = re.compile(r"(?<![\w.$])range\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*(-?\d+)\s*)?\)", re.IGNORECASE)
 _LIMIT_RE = re.compile(r"(?<![\w.$])LIMIT\b", re.IGNORECASE)
 _RETURN_RE = re.compile(r"(?<![\w.$])RETURN\b", re.IGNORECASE)
 _LIMIT_VALUE_RE = re.compile(r"LIMIT\s+(\S+)(.*)$", re.IGNORECASE | re.DOTALL)
@@ -153,6 +157,20 @@ def _check_var_length(masked: str, max_var_length: int) -> None:
             raise QueryRejected(f"unbounded path quantifiers (+, *) are not allowed; use {{1,{max_var_length}}}")
 
 
+def _check_range_literals(masked: str, max_range_size: int) -> None:
+    for m in _RANGE_RE.finditer(masked):
+        lower, upper = int(m.group(1)), int(m.group(2))
+        step = int(m.group(3)) if m.group(3) else 1
+        if step == 0:
+            raise QueryRejected("range() step must not be 0")
+        size = (upper - lower) // step + 1 if (upper - lower) * step >= 0 else 0
+        if size > max_range_size:
+            raise QueryRejected(
+                f"range({lower}, {upper}{', ' + str(step) if m.group(3) else ''}) would materialise {size} values; "
+                f"keep literal ranges at or below {max_range_size} values"
+            )
+
+
 def _apply_row_limit(clean: str, masked: str, row_limit: int) -> str:
     limits = list(_LIMIT_RE.finditer(masked))
     returns = list(_RETURN_RE.finditer(masked))
@@ -173,7 +191,7 @@ def _apply_row_limit(clean: str, masked: str, row_limit: int) -> str:
     return f"{clean.rstrip()} LIMIT {row_limit}"
 
 
-def check_readonly(query: str, max_var_length: int = 5, row_limit: int = 200) -> str:
+def check_readonly(query: str, max_var_length: int = 5, row_limit: int = 200, max_range_size: int = 100_000) -> str:
     """Validate ``query`` against the read-only rules and return the normalized statement.
 
     Raises ``QueryRejected`` with a message the caller (or an LLM agent) can act on.
@@ -184,6 +202,8 @@ def check_readonly(query: str, max_var_length: int = 5, row_limit: int = 200) ->
         raise ValueError("max_var_length must be >= 1")
     if row_limit < 1:
         raise ValueError("row_limit must be >= 1")
+    if max_range_size < 1:
+        raise ValueError("max_range_size must be >= 1")
 
     clean, masked = _strip_comments_and_mask(query)
     clean, masked = clean.strip(), masked.strip()
@@ -203,4 +223,5 @@ def check_readonly(query: str, max_var_length: int = 5, row_limit: int = 200) ->
         raise QueryRejected(f"keyword {forbidden.group(1).upper()} is not allowed in read-only queries")
 
     _check_var_length(masked, max_var_length)
+    _check_range_literals(masked, max_range_size)
     return _apply_row_limit(clean, masked, row_limit)

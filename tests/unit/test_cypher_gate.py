@@ -128,6 +128,25 @@ def test_star_outside_patterns_is_not_a_traversal() -> None:
     assert check_readonly("MATCH (a) WHERE a.list = [1 * 2] RETURN a").endswith("LIMIT 200")
 
 
+def test_literal_range_size_is_capped() -> None:
+    assert check_readonly("UNWIND range(1, 100) AS i RETURN i").endswith("LIMIT 200")
+    assert check_readonly("UNWIND range(1, 100000) AS i RETURN count(i)").endswith("LIMIT 200")
+    assert check_readonly("UNWIND range(0, 1000000, 100) AS i RETURN count(i)").endswith("LIMIT 200")
+    assert check_readonly("UNWIND range(1, $n) AS i RETURN i").endswith("LIMIT 200")  # parameters pass (unseen)
+    assert check_readonly("MATCH (a) WHERE a.range = 1 RETURN a.range").endswith("LIMIT 200")  # property, not a call
+    for bad in [
+        "UNWIND range(1, 3000000) AS i RETURN count(i)",
+        "RETURN size(range(1, 100001)) AS n",
+        "WITH [x IN range(0, 5000000, 2) | x] AS l RETURN size(l)",
+        "UNWIND range(1, 10, 0) AS i RETURN i",
+    ]:
+        with pytest.raises(QueryRejected, match="range"):
+            check_readonly(bad)
+    assert check_readonly("UNWIND range(1, 500) AS i RETURN i", max_range_size=1000).endswith("LIMIT 200")
+    with pytest.raises(QueryRejected, match="range"):
+        check_readonly("UNWIND range(1, 500) AS i RETURN i", max_range_size=100)
+
+
 def test_forbidden_list_contains_contract_keywords() -> None:
     required = {"CREATE", "MERGE", "SET", "DELETE", "REMOVE", "DROP", "ALTER", "COPY", "LOAD", "INSTALL", "ATTACH", "DETACH", "CALL", "IMPORT", "EXPORT", "BEGIN", "COMMIT"}
     assert required <= FORBIDDEN_KEYWORDS
@@ -138,3 +157,5 @@ def test_bad_configuration_raises_value_error() -> None:
         check_readonly("MATCH (a) RETURN a", max_var_length=0)
     with pytest.raises(ValueError):
         check_readonly("MATCH (a) RETURN a", row_limit=0)
+    with pytest.raises(ValueError):
+        check_readonly("MATCH (a) RETURN a", max_range_size=0)

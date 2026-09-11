@@ -9,6 +9,11 @@ backend is checked against it by the conformance tests, so its behaviour defines
 * ``neighborhood`` is ``ContextGraph.k_hop`` (BFS bounded by depth, optional edge-type / label filters and
   direction) rendered through ``ContextGraph.fragment``; nodes are ordered start first, then by (hop, id);
 * ``run_readonly_cypher`` raises ``NotSupported`` and ``capabilities()["cypher"]`` is False.
+
+When ``factory.make_store`` cannot open the configured embedded database (fresh checkout, nothing built yet) it
+returns a ``NetworkXStore`` that *stands in for* the un-opened ``LadybugStore`` (``embedded``). ``build`` then also
+builds that database and ``stored_manifest`` reports its sidecar, so ``loader.build_embedded_db(store, data_dir)``
+creates the embedded database on the first run and skips it afterwards, exactly as with the real store.
 """
 from __future__ import annotations
 
@@ -20,7 +25,7 @@ from typing import Any
 import networkx as nx
 
 from throughline.graph.context_graph import ContextGraph
-from throughline.graph.store import BaseStore, CypherResult, NotSupported, record_from_flat
+from throughline.graph.store import BaseStore, CypherResult, GraphStore, NotSupported, record_from_flat
 from throughline.models import GraphFragment, SearchHit, StatsOut
 
 log = logging.getLogger(__name__)
@@ -36,13 +41,14 @@ EXAMPLE_QUERIES: list[dict[str, Any]] = [
 class NetworkXStore(BaseStore):
     name = "networkx"
 
-    def __init__(self, graph: ContextGraph) -> None:
+    def __init__(self, graph: ContextGraph, embedded: GraphStore | None = None) -> None:
         self.graph = graph
+        self.embedded = embedded  # the un-opened embedded store this one stands in for (see the module docstring)
 
     # ------------------------------------------------------------------ lifecycle
 
     def capabilities(self) -> dict[str, Any]:
-        return {
+        caps: dict[str, Any] = {
             "cypher": False,
             "multi_label_patterns": False,
             "shortest_path": True,
@@ -51,13 +57,20 @@ class NetworkXStore(BaseStore):
             "engine_version": nx.__version__,
             "dialect": "none",
         }
+        if self.embedded is not None:
+            caps["stands_in_for"] = self.embedded.name
+        return caps
 
     def build(self, nodes_path: Path, edges_path: Path, manifest: dict) -> None:
-        """Reload the projection from the canonical files in place (callers holding the graph see the new data)."""
+        """Reload the projection from the canonical files in place (callers holding the graph see the new data)
+        and, when this store stands in for an embedded one, build that database too."""
         fresh = ContextGraph.from_jsonl(nodes_path, edges_path)
         fresh.build_info = dict(manifest)
         self.graph.reload_from(fresh)
         log.info("networkx store reloaded %d nodes, %d edges", len(self.graph), self.graph.G.number_of_edges())
+        if self.embedded is not None:
+            log.info("building the %s database this store stands in for", self.embedded.name)
+            self.embedded.build(nodes_path, edges_path, manifest)
 
     def open(self) -> None:  # nothing to open: the projection is already in memory
         return None
@@ -66,6 +79,11 @@ class NetworkXStore(BaseStore):
         return None
 
     def stored_manifest(self) -> dict[str, Any] | None:
+        """The build this store already holds: the embedded database's sidecar when standing in for one (None until
+        it is built), otherwise the manifest the projection was loaded with."""
+        if self.embedded is not None:
+            stored = getattr(self.embedded, "stored_manifest", None)
+            return stored() if callable(stored) else None
         info = self.graph.build_info or {}
         return dict(info) if info.get("checksum") else None
 

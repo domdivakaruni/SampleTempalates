@@ -20,6 +20,7 @@ gate; timeouts are the driver/transaction timeout mapped to ``QueryTimeout``.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import time
@@ -115,8 +116,14 @@ def _to_native(value: Any) -> Any:
 
 
 def _storable(value: Any) -> Any:
-    """Neo4j properties must be scalars or homogeneous lists of scalars; anything else becomes a JSON string."""
+    """Neo4j properties must be scalars, temporal values or homogeneous lists of scalars; anything else becomes
+    a JSON string. TIMESTAMP columns arrive as naive UTC ``datetime`` values from ``loader.coerce`` and are stored
+    as zoned ``DateTime`` (UTC) so ``datetime('2026-09-10T00:00:00Z')`` comparisons work in queries."""
     if value is None or isinstance(value, bool | int | float | str):
+        return value
+    if isinstance(value, dt.datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=dt.UTC)
+    if isinstance(value, dt.date | dt.time):
         return value
     if isinstance(value, list | tuple):
         items = [v for v in value if v is not None]
