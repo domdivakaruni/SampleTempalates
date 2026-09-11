@@ -1,120 +1,120 @@
 # Throughline
 
-**A security context graph that fuses cloud posture, endpoint (EDR) telemetry and threat-intelligence impact, so a
-human or an AI analyst can ask questions about an alert and get answers no single tool can give.**
+**A security context graph that fuses cloud posture, endpoint (EDR) telemetry and threat-intelligence impact, so a human or AI analyst can ask questions about an alert and get answers no single tool can give.**
 
-Throughline is a working prototype built by a (fictional) startup for human and agent security analysts. It extends a
-Wiz-style cloud security graph with CrowdStrike Falcon / Cortex XDR-style endpoint telemetry and with impact
-metadata derived from threat-intel reports, and puts a graph explorer, a re-ranked alert queue and a chat-based
-analyst on top. Everything in the repository is simulated: the customer (Larkspur Financial), its estate, the
-intrusions, the threat actors and the intel reports are fictional.
+Throughline is a working prototype from a fictional startup. It extends a Wiz-style cloud security graph (accounts, workloads, identities, permissions, exposure, data stores, vulnerabilities) with CrowdStrike Falcon / Cortex XDR-style endpoint telemetry (devices, processes, detections, credential theft, lateral movement) and with threat-intelligence-derived impact metadata (actors, campaigns, exploited CVEs, indicators). On top of that graph it runs explainable analytics (blast radius, attack paths, contextual re-ranking, storyline correlation) and exposes them to a Wiz-like UI, to a chat-based analyst assistant, and to external AI agents through a typed tool API.
 
-> Status: prototype. One command runs the whole thing on a laptop with no infrastructure (an embedded graph
-> database). See `docs/` for the product definition, architecture decisions, data model and storyline.
+Everything in the repository is simulated. The customer (Larkspur Financial), its people, its estate, the threat actors, campaigns, malware, indicators and intel reports are fictional. Real CVE identifiers appear for realism; their attribution to fictional actors is fictional.
 
-## What it demonstrates
+![Dashboard](docs/screenshots/dashboard.png)
 
-The estate is under two simultaneous, fictional attacks plus realistic background noise:
+## What the demo proves
 
-* **EMBERCAST (Cinder Jackal)**: phishing on a finance workstation, credential theft, SSH to a bastion that is also a
-  cloud VM, instance-metadata credential theft, cross-account role assumption, and collection from the cardholder
-  data vault. The EDR sees a handful of medium alerts on two hosts; the cloud audit log sees "valid" API calls. Only
-  the graph joins them into one seven-stage storyline whose blast radius is PCI data.
-* **SALTWORKS (Hollow Tide)**: mass exploitation of Log4Shell on an internet-facing statement-rendering service. One
-  medium WAF alert among thousands becomes the second-highest priority because the graph knows the host is exposed,
-  vulnerable, actively targeted by an actor working against fintechs, and holds a role that reaches database
-  credentials.
-* **Noise**: an EICAR test file rated High, a Critical "public S3 bucket" finding on marketing assets, an admin's
-  PsExec inside an approved change window, an executive's impossible-travel login over VPN, scanner traffic.
+The estate contains two live intrusions and a lot of noise:
 
-The contextual score re-ranks the queue: a vendor *Medium* becomes #1 (score >= 90) and a vendor *Critical* drops to
-noise (<= 25), each with a visible factor breakdown. The analyst chat answers questions such as:
+* **EMBERCAST (fictional actor Cinder Jackal).** Phishing on an employee workstation, credential theft, SSH to a bastion that is also a cloud VM, theft of the instance role's credentials from the metadata service, cross-account role assumption into production, and bulk download of the cardholder data vault. The EDR sees a handful of *medium* alerts on two hosts. The cloud audit log sees "valid credential" API calls. Neither connects them.
+* **SALTWORKS (fictional actor Hollow Tide).** Mass exploitation of Log4Shell on an internet-exposed statement-rendering service whose instance role can read a config bucket holding database credentials. The WAF logs one *medium* exploit-string alert among thousands.
+* **Noise.** A Critical CSPM finding on a public marketing bucket, a High EICAR test-file detection on an isolated dev VM, an admin's PsExec inside an approved change window, an "impossible travel" login that is really the VPN, scanner traffic, quarantined attachments, and hundreds of routine posture issues.
 
-1. Show me everything connected to the credential-dumping alert on BAS-01. What can an attacker reach from here?
-2. Which of today's medium-severity endpoint alerts sit on assets with a path to regulated data?
-3. Is the cloud API activity from the bastion role related to any endpoint detection?
-4. What is the blast radius if the bastion role is fully compromised?
-5. Which internet-exposed hosts have a vulnerability an actor is actively exploiting against fintechs right now?
-6. Rank all open alerts by contextual risk, not vendor severity, and explain the top 3.
-7. Trace the full attack path from the phishing detection on WKS-3391 to any regulated data store.
-8. Which credentials used in cloud API calls today were seen being stolen on an endpoint?
-9. Do any current detections match IOCs or TTPs from the Cinder Jackal report, and what do they touch?
-10. Show only alerts on assets that can reach cardholder data.
-11. Is the "S3 bucket public" critical finding actually risky?
-12. If we isolate BAS-01 and rotate the bastion role now, what do we contain and what breaks?
+With the graph, the *medium* credential-dumping alert on the bastion becomes the #1 priority (contextual score 90+) because five hops away it reaches PCI data; the Critical public-bucket finding drops to noise because the bucket holds public assets and no actor is interested; the Log4Shell host ranks #2 because threat intel says the vulnerability is being mass-exploited against fintechs right now. Every score comes with its factor breakdown and evidence.
 
-Every answer is grounded in graph traversals, cites node ids, and highlights its evidence subgraph on the canvas.
-The same typed tools power the UI, the chat (Claude with tool use when an API key is present, a deterministic
-playbook analyst otherwise) and a REST surface for external AI agents.
+The twelve analyst questions the prototype answers deterministically (no LLM key required) are listed in [docs/04-storyline.md](docs/04-storyline.md#6-expected-answers-to-the-12-demo-questions-used-by-scenario-tests); the founder demo script is in [docs/01-product-definition.md](docs/01-product-definition.md#9-demo-script-live-founder-walkthrough).
 
 ## Quick start
 
-Requirements: Python 3.11+, Node 22+. No Docker, no database server.
+Requirements: Python 3.11+, Node 22+, about 2 GB of disk. No Docker, no cloud accounts, no API keys.
 
 ```bash
-make setup      # python venv + dependencies, web dependencies
-make demo       # simulate the estate, enrich it, build the embedded graph DB, build the UI, serve on :8000
+make setup      # python venv + web dependencies
+make demo       # simulate the estate, enrich the graph, build the embedded graph DB, build the UI, serve
+# open http://127.0.0.1:8000
 ```
 
-Then open http://127.0.0.1:8000. Optional: put `ANTHROPIC_API_KEY=...` in `.env` to switch the analyst from the
-offline playbooks to Claude (`claude-opus-5` by default, configurable with `ANTHROPIC_MODEL`).
-
-Other useful commands:
+Useful variants:
 
 ```bash
-make data                       # regenerate the dataset (deterministic; seed in .env)
+make data                       # (re)generate data/generated (~25k nodes, ~90k edges) and the LadybugDB file
 make ask Q="Which credentials used in cloud API calls today were seen being stolen on an endpoint?"
-.venv/bin/python scripts/demo_questions.py      # run the twelve demo questions through the offline analyst
+.venv/bin/python scripts/demo_questions.py           # run all twelve demo questions through the offline analyst
 make test                       # unit, conformance, API and scenario tests
 make dev                        # API with reload + Vite dev server (http://localhost:5173)
 ```
 
-## Architecture in one paragraph
+To use Claude as the analyst instead of the deterministic playbooks, set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`, default `claude-opus-5`) in `.env`. The offline analyst is automatically used when no key is present or the API fails.
 
-Simulated connectors emit vendor-shaped feeds (Wiz-like inventory and issues, Falcon-like devices and detections,
-CloudTrail-like events, WAF/IDS/Okta alerts, STIX-like intel). Normalizers and entity resolution (EDR device to
-cloud VM, endpoint users to identities, credentials as first-class join keys) produce a canonical property graph
-(`data/generated/graph/nodes.jsonl`, `edges.jsonl`). The analytics library enriches it at build time (IOC matching,
-exploited-CVE overlays, lateral movement, storyline correlation, explainable contextual scores) and answers on-demand
-questions (blast radius, attack paths, credential joins, containment simulation) on an in-process NetworkX
-projection. The graph is loaded into an embedded Cypher graph database (LadybugDB, the maintained fork of Kuzu) that
-the UI's Cypher panel and the agent's read-only `run_cypher` tool query; a Neo4j adapter provides the server-side
-path, and the table-per-label layout maps directly onto BigQuery Graph property-graph definitions for
-analytics at scale later. FastAPI serves the REST API, the SSE chat stream and the React/Cytoscape UI.
+## Architecture in one picture
 
+```mermaid
+flowchart LR
+  subgraph feeds[Simulated connectors]
+    W[Wiz-style cloud posture]
+    F[Falcon-style EDR]
+    CT[CloudTrail-style audit]
+    TI[Threat intel reports and IOCs]
+    N[WAF / IDS / Okta alerts]
+  end
+  feeds --> NORM[Normalize + entity resolution\nEndpoint SAME_AS VirtualMachine\ncredential = join key]
+  NORM --> CG[(Canonical graph\nnodes.jsonl / edges.jsonl)]
+  CG --> ENR[Build-time enrichment\nIOC matching, TI overlays, lateral movement,\nstorylines, contextual scores]
+  ENR --> LB[(LadybugDB embedded Cypher DB\nread-only)]
+  ENR --> NX[NetworkX projection\nblast radius, attack paths, containment]
+  LB & NX --> API[FastAPI /api/v1\nREST + SSE]
+  API --> UI[React + Cytoscape UI]
+  API --> AG[Analyst agent\nClaude tool use or offline playbooks]
+  API --> EXT[External agents\ntyped tool API]
 ```
-feeds (simulated) -> normalize + resolve -> canonical graph JSONL -> enrich (analytics) -> LadybugDB + NetworkX
-                                                                                              |
-                                              React + Cytoscape UI  <-  FastAPI + SSE  <-  AnalyticsEngine + ToolRegistry
-                                              Claude / offline analyst  <-----------------------'
-```
 
-## Repository map
+Decisions and trade-offs are recorded in [docs/02-architecture.md](docs/02-architecture.md). In short: the demo runs on **LadybugDB**, the maintained fork of Kuzu (embedded, Cypher, zero infrastructure); the same `GraphStore` interface has a **Neo4j** backend for server deployments and a NetworkX fallback; the canonical data is engine-neutral JSONL so BigQuery Graph can consume the same tables later; analytics with custom edge semantics run on an in-process NetworkX projection; and the analyst agent uses the same typed, read-only tools whether it is Claude or the deterministic playbook engine.
 
-| Path | What |
+## Screens
+
+| Screen | What it shows |
 |---|---|
-| `docs/01-product-definition.md` | Product, users, graph-advantage questions, scoring concept, demo script |
-| `docs/02-architecture.md` | Architecture decision record incl. graph database comparison and founder decisions |
-| `docs/03-graph-schema.md` | Labels, typed properties, relationship types, id scheme, entity resolution |
-| `docs/04-storyline.md` | The simulated customer, the two intrusions, the noise, ground truth for tests |
-| `docs/05-api-contract.md` | REST API, SSE chat protocol, agent tool set |
-| `docs/06-build-plan.md` | Module ownership and Python interfaces |
-| `docs/07-agent-and-api.md` | How the analyst agent works and how external agents use the API |
-| `throughline/simulator/` | Deterministic estate, telemetry and threat-intel simulation; `build.py` pipeline |
-| `throughline/graph/` | `ContextGraph` projection, `GraphStore` backends (LadybugDB/Kuzu, NetworkX, Neo4j), loader |
-| `throughline/analytics/` | Enrichment, scoring, blast radius, attack paths, correlation, insights, containment |
-| `throughline/agent/` | Tool registry, Claude tool-use loop, offline playbook analyst |
-| `throughline/api/` | FastAPI application and routers |
-| `web/` | React + TypeScript + Cytoscape UI |
-| `tests/` | unit, backend conformance, API and scenario tests |
+| Dashboard | Contextual leaderboard next to the vendor-severity queue, storyline cards, coverage, threat-intel pressure |
+| Alerts | Every alert with vendor severity and contextual score side by side, "why" chips, storyline and TI badges |
+| Alert detail | **Flat view** (exactly what the vendor console shows) vs **Graph context** (evidence subgraph, risk breakdown, insights with hop counts, blast radius, attack paths, storyline) |
+| Storylines | Correlated multi-stage intrusions with kill-chain stages and a containment simulator |
+| Graph explorer | Search, expand, filter, path finder, blast radius, attack paths and a read-only Cypher console |
+| Threat intel | Actors, campaigns, reports and the "exposed hosts with actively exploited vulnerabilities" table |
+| Analyst drawer | Chat with streaming answers, live tool calls, evidence highlighted on the canvas, cited node ids |
 
-## Fiction and safety notes
+Screenshots live in `docs/screenshots/`.
 
-All organisations, people, threat actors, campaigns, malware, domains, hashes and reports are fictional. External IP
-addresses use documentation ranges. Real CVE identifiers appear for realism; any attribution to a fictional actor is
-fictional. The analyst agent only has read-only tools; Cypher from the agent or the UI passes a statement gate, a
-read-only database handle and a timeout.
+## Repository layout
+
+```
+throughline/            Python package
+  schema/               canonical labels, edge types, typed columns (compiled to DDL)
+  simulator/            deterministic data simulation: inventory, threat_intel, events stages + build pipeline
+  graph/                GraphStore backends (LadybugDB/Kuzu, NetworkX, Neo4j), loader, Cypher gate
+  analytics/            enrichment, scoring, blast radius, attack paths, correlation, insights, containment
+  agent/                tool registry, Claude tool-use loop, offline analyst, sessions
+  api/                  FastAPI application and routers
+web/                    React + TypeScript + Cytoscape UI
+docs/                   product definition, architecture, schema, storyline, API contract, build plan
+tests/                  unit, conformance (per backend), api, scenarios (the twelve questions on real data)
+scripts/                demo question runner, screenshots
+data/fixtures/          small committed fixture graphs; data/generated is built locally
+```
+
+## Documentation
+
+1. [Product definition](docs/01-product-definition.md): purpose, users, the graph-advantage questions, the scoring concept, storyline, demo script.
+2. [Architecture](docs/02-architecture.md): graph database comparison and decision, data model conventions, analytics design, agent design, founder decisions.
+3. [Graph schema](docs/03-graph-schema.md): every label, property, edge type and the entity resolution rules.
+4. [Storyline and ground truth](docs/04-storyline.md): the simulated estate, both intrusions, the noise, and the expected answers.
+5. [API and tool contract](docs/05-api-contract.md): REST endpoints, SSE events, the analyst tool set.
+6. [Build plan](docs/06-build-plan.md): module ownership and interfaces.
+7. [Agent and API notes](docs/07-agent-and-api.md): how the analyst works, safety, using the tool API from your own agent.
+
+## Configuration
+
+All settings are environment variables (see `.env.example`): graph backend (`ladybug`, `kuzu`, `networkx`, `neo4j`), Neo4j connection, simulation seed and scale, Anthropic model and effort, agent mode (`auto`, `llm`, `offline`), host and port.
+
+## Status and limitations
+
+This is a prototype built to demonstrate a capability, not a product. The data is simulated and deterministic; the connectors are generators shaped like vendor APIs rather than API clients; the Neo4j backend is implemented but not exercised in this repository's tests; the LLM analyst path is tested with a fake client. See the "Path to production" section of the architecture document for what changes next.
 
 ## License
 
-Apache-2.0.
+Apache-2.0. See [LICENSE](LICENSE).
