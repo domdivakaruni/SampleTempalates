@@ -98,7 +98,7 @@ export const EXAMPLE_QUERIES: { title: string; query: string }[] = [
   {
     title: 'Alerts on hosts whose role can reach a crown jewel',
     query:
-      'MATCH (a:Alert)-[:ON_ENDPOINT]->(e:Endpoint)-[:SAME_AS]->(vm:VirtualMachine)-[:HAS_ROLE]->(r:IamRole)-[:CAN_ACCESS]->(d)\nWHERE d.crown_jewel = true\nRETURN a.id, a.title, vm.name, r.name, d.name LIMIT 25',
+      'MATCH (a:Alert)-[:ON_ENDPOINT]->(e:Endpoint)-[:SAME_AS]->(vm:VirtualMachine)-[:HAS_ROLE]->(r:IamRole)-[:CAN_ACCESS]->(d)\nWHERE d.crown_jewel = true\nRETURN DISTINCT a.id, a.title, vm.name, r.name, d.name LIMIT 25',
   },
   {
     title: 'Credentials stolen on an endpoint and used in the cloud',

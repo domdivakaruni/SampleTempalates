@@ -42,6 +42,17 @@ make dev                        # API with reload + Vite dev server (http://loca
 
 To use Claude as the analyst instead of the deterministic playbooks, set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`, default `claude-opus-5`) in `.env`. The offline analyst is automatically used when no key is present or the API fails.
 
+## Five-minute demo
+
+1. Open the **Dashboard**. The contextual leaderboard puts a vendor-*medium* endpoint alert on the bastion at #1 (score 92) next to a vendor-severity queue full of criticals that score 20-25. Click the callout to see the rank move.
+2. Open **Alerts**, click the "Medium EDR alerts with a path to regulated data" chip, then open the top row (bastion credential access). Flip between **Flat view** (what the EDR console shows) and **Graph context** (path to the cardholder vault, score breakdown, insights with hop counts).
+3. Press **Ask analyst about this alert** and type: *Trace the full attack path from the phishing detection on WKS-3391 to any regulated data store.* The seven-stage path renders on the canvas as the answer streams.
+4. Ask: *Which credentials used in cloud API calls today were seen being stolen on an endpoint?* The two temporary AWS keys join the endpoint theft to the cloud audit trail.
+5. Open **Threat Intel > Exposure** or ask: *Which internet-exposed hosts have a vuln a threat actor is actively exploiting against fintechs right now?* The Log4Shell statement service ranks first because of exposure, mass exploitation and its role's reach.
+6. Ask: *Is the 'S3 bucket public' critical finding actually risky?* Public data, no privilege, no actor interest: contextual 25.
+7. Open **Storylines > EMBERCAST**, run the containment simulation (isolate the bastion, rotate the role): what is cut, what breaks, what residual risk remains.
+8. Open **Graph Explorer > Cypher** and run one of the schema's example queries against the embedded graph database.
+
 ## Architecture in one picture
 
 ```mermaid

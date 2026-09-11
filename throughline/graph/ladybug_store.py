@@ -155,7 +155,7 @@ EXAMPLE_QUERIES: list[dict[str, Any]] = [
         "query": (
             "MATCH (a:Alert)-[:ON_ENDPOINT]->(e:Endpoint)-[:SAME_AS]->(v:VirtualMachine)-[:HAS_ROLE]->(r:IamRole)"
             "-[:CAN_ASSUME*0..2]->(r2:IamRole)-[:CAN_ACCESS]->(b:StorageBucket) WHERE b.crown_jewel "
-            "RETURN a.id, b.name LIMIT 20"
+            "RETURN DISTINCT a.id, b.name LIMIT 20"
         ),
     },
     {
@@ -170,7 +170,7 @@ EXAMPLE_QUERIES: list[dict[str, Any]] = [
         "query": (
             "MATCH (:Internet)-[:EXPOSES]->(v:VirtualMachine)-[:VULNERABLE_TO]->(c:Vulnerability) "
             "WHERE c.exploitation_status IN ['active', 'mass_exploitation'] "
-            "RETURN v.name, v.environment, c.cve_id, c.exploitation_status, v.has_edr_sensor ORDER BY c.cvss DESC LIMIT 25"
+            "RETURN DISTINCT v.name, v.environment, c.cve_id, c.cvss, c.exploitation_status, v.has_edr_sensor ORDER BY c.cvss DESC LIMIT 25"
         ),
     },
     {
@@ -192,7 +192,7 @@ EXAMPLE_QUERIES: list[dict[str, Any]] = [
         "title": "IOC matches and what they indicate",
         "query": (
             "MATCH (x)-[:MATCHES_IOC]->(i:Indicator)-[:INDICATES]->(t) "
-            "RETURN label(x) AS matched_label, x.name, i.ioc_type, i.value, label(t) AS indicates, t.name LIMIT 25"
+            "RETURN DISTINCT label(x) AS matched_label, x.name, i.ioc_type, i.value, label(t) AS indicates, t.name LIMIT 25"
         ),
     },
     {

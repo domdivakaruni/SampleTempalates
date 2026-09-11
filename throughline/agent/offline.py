@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -293,6 +294,21 @@ def _b(x: Any) -> str:
     return f"`{x}`"
 
 
+# Nodes and alerts are described in full the first time an answer mentions them and by id afterwards, so a
+# finding does not repeat a 120-character descriptor three times. Reset per answer in ``OfflineAnalyst.answer``.
+_MENTIONED: ContextVar[set[str] | None] = ContextVar("throughline_offline_mentioned", default=None)
+
+
+def _first_mention(node_id: Any) -> bool:
+    seen = _MENTIONED.get()
+    if seen is None or node_id is None:
+        return True
+    if node_id in seen:
+        return False
+    seen.add(node_id)
+    return True
+
+
 def _g(d: Mapping[str, Any] | None, *keys: str, default: Any = None) -> Any:
     cur: Any = d
     for k in keys:
@@ -305,6 +321,8 @@ def _g(d: Mapping[str, Any] | None, *keys: str, default: Any = None) -> Any:
 def _node_ref(n: Mapping[str, Any] | None) -> str:
     if not n:
         return "(unknown node)"
+    if not _first_mention(n.get("id")):
+        return _b(n.get("id"))
     label, name = n.get("label", ""), n.get("name", "")
     extra = []
     props = n.get("props") or {}
@@ -321,6 +339,8 @@ def _node_ref(n: Mapping[str, Any] | None) -> str:
 def _alert_ref(a: Mapping[str, Any] | None) -> str:
     if not a:
         return "(unknown alert)"
+    if not _first_mention(a.get("id")):
+        return _b(a.get("id"))
     host = f" on {a['hostname']}" if a.get("hostname") else ""
     return f"{_b(a.get('id'))} - {a.get('title', '')}{host} (vendor {a.get('vendor_severity')} -> contextual {a.get('contextual_score')} {a.get('contextual_band')})"
 
@@ -678,6 +698,19 @@ class OfflineAnalyst:
         context: Mapping[str, Any] | None = None,
         on_event: EventSink | None = None,
         history: Sequence[ChatTurn] | None = None,
+    ) -> AnalystAnswer:
+        token = _MENTIONED.set(set())
+        try:
+            return self._answer(question, context, on_event, history)
+        finally:
+            _MENTIONED.reset(token)
+
+    def _answer(
+        self,
+        question: str,
+        context: Mapping[str, Any] | None,
+        on_event: EventSink | None,
+        history: Sequence[ChatTurn] | None,
     ) -> AnalystAnswer:
         emit: EventSink = on_event or (lambda ev: None)
         context = dict(context or {})
