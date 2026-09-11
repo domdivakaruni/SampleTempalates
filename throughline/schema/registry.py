@@ -14,7 +14,7 @@ column named the same; loaders json.dumps the value).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ----------------------------------------------------------------------------- core types
 

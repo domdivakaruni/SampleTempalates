@@ -109,7 +109,7 @@ _SYNTHETIC_SPEC: list[tuple[str, float, float, bool, str, str, str, str, str]] =
 ]
 
 _SYNTHETIC: list[CVE] = [
-    CVE(cid, cvss, epss, kev, comp, eco, aff, fixed, "2026-0%d-1%dT00:00:00Z" % (1 + i % 8, i % 9), desc, synthetic=True,
+    CVE(cid, cvss, epss, kev, comp, eco, aff, fixed, f"2026-0{1 + i % 8}-1{i % 9}T00:00:00Z", desc, synthetic=True,
         exposure_surface="internet" if comp in {"openssl", "nginx", "envoy", "spring-security", "tomcat-embed", "next", "express", "kubernetes-ingress-nginx", "gitlab", "grafana", "keycloak", "vpn-gateway-firmware"} else ("local" if comp in {"microsoft-office", "chromium", "okta-verify-agent"} else "internal"))
     for i, (cid, cvss, epss, kev, comp, eco, aff, fixed, desc) in enumerate(_SYNTHETIC_SPEC)
 ]
