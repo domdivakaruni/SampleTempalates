@@ -19,6 +19,8 @@ export function Composer() {
       <div className="flex items-end gap-1.5 rounded-md border border-line-2 bg-bg px-2 py-1.5 focus-within:border-accent-2">
         <textarea
           ref={ref}
+          data-testid="analyst-input"
+          aria-label="Ask the analyst"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {

@@ -27,7 +27,7 @@ export function NodeRef({ node, id, name, label, className, mode = 'focus', onSe
   const click = () => {
     if (mode === 'select' && onSelect) return onSelect(nid)
     if (mode === 'focus' && active) return focus(nid)
-    navigate(`/explorer?seed=${encodeURIComponent(nid)}`)
+    navigate(`/explorer?id=${encodeURIComponent(nid)}`)
   }
   return (
     <button type="button" onClick={click} className={cn('inline-flex max-w-full items-center gap-1 rounded px-1 py-[1px] text-left hover:bg-panel-3', className)} title={nid}>

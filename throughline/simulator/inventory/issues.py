@@ -214,6 +214,14 @@ def _function_issues(inv: Inventory, s: IssueSink) -> None:
         name = inv.name(fid)
         if p["url_enabled"] and p.get("url_auth_type") == "NONE":
             s.add(fid, "wc-id-lambda-url-noauth", "Lambda function URL without authentication", "high", f"Function {name} exposes a function URL with AuthType NONE.", "Require IAM auth or front the function with API Gateway.", mandatory=True)
+        crit = [c for c in inv.out(fid, "VULNERABLE_TO") if CVES[c.split(':', 1)[1]].cvss >= 9.0]
+        sensitive = [t for t in inv.out(fid, "CAN_ACCESS") if inv.props(t).get("sensitivity") in ("high", "critical")]
+        if p["url_enabled"] and crit and sensitive:
+            s.add(fid, "wc-id-toxic-exposed-function-data", "Toxic combination: internet-exposed function with critical vulnerability and access to sensitive data", "critical",
+                  f"Function {name} is reachable through its function URL, bundles a dependency vulnerable to {', '.join(c.split(':', 1)[1] for c in crit[:3])} and its execution role can reach {len(sensitive)} sensitive data stores.",
+                  "Update the vulnerable dependency, require IAM auth on the URL and scope the execution role.", category="TOXIC_COMBINATION", techniques=["T1190"], mandatory=True)
+        elif p["url_enabled"] and crit:
+            s.add(fid, "wc-id-exposed-function-vuln", "Publicly exposed function with critical vulnerability", "high", f"Function {name} is reachable through its function URL and bundles a dependency vulnerable to {', '.join(c.split(':', 1)[1] for c in crit[:3])}.", "Update the vulnerable dependency.", category="TOXIC_COMBINATION", techniques=["T1190"], mandatory=True)
         if p["runtime"] in ("python3.9", "nodejs18.x", "java11") and r.random() < 0.7:
             s.add(fid, "wc-id-lambda-deprecated-runtime", "Lambda function uses a deprecated runtime", "low", f"Function {name} runs on {p['runtime']}.", "Upgrade the runtime.", weight=0.6)
         if p.get("env_var_secrets"):
@@ -232,7 +240,12 @@ def _k8s_issues(inv: Inventory, s: IssueSink) -> None:
         if p["privileged"]:
             s.add(wid, "wc-id-k8s-privileged", "Container runs in privileged mode", "medium", f"Workload {inv.name(wid)} runs privileged containers.", "Drop privileged mode; use specific capabilities.", weight=0.8)
         crit = [c for c in inv.out(wid, "VULNERABLE_TO") if CVES[c.split(':', 1)[1]].cvss >= 9.0]
-        if p.get("exposure") == "internet" and crit:
+        sensitive = [t for t in inv.out(wid, "CAN_ACCESS") if inv.props(t).get("sensitivity") in ("high", "critical")]
+        if p.get("exposure") == "internet" and crit and sensitive:
+            s.add(wid, "wc-id-toxic-exposed-workload-data", "Toxic combination: internet-exposed workload with critical vulnerability and access to sensitive data", "critical",
+                  f"Workload {inv.name(wid)} is exposed through a load balancer, is vulnerable to {', '.join(c.split(':', 1)[1] for c in crit[:3])} and its IRSA role can reach {len(sensitive)} sensitive data stores.",
+                  "Rebuild the image with patched packages and scope the IRSA role to the data the service needs.", category="TOXIC_COMBINATION", techniques=["T1190"], mandatory=True)
+        elif p.get("exposure") == "internet" and crit:
             s.add(wid, "wc-id-exposed-workload-vuln", "Publicly exposed workload with critical vulnerability", "high", f"Workload {inv.name(wid)} is exposed through a load balancer and vulnerable to {', '.join(c.split(':', 1)[1] for c in crit[:3])}.", "Rebuild the image with patched packages.", category="TOXIC_COMBINATION", techniques=["T1190"], mandatory=True)
 
 

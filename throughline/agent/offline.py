@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from throughline.agent.prompts import DEMO_QUESTIONS, PLAYBOOK_HINTS
-from throughline.agent.tools import EvidenceSet, ToolRegistry, ToolResult
+from throughline.agent.tools import EvidenceSet, ToolRegistry, ToolResult, edge_out_from_id
 from throughline.models import AnalystAnswer, ChatEvent, ChatTurn, Finding, ToolCallRecord
 from throughline.schema import label_for_id
 
@@ -47,6 +47,7 @@ INTENTS: tuple[str, ...] = (
     "alerts_reaching_crown_jewels",
     "is_alert_actually_risky",
     "containment_simulation",
+    "alerts_on_entity",
     "what_is_entity",
     "neighborhood_of_entity",
     "why_is_alert_risky",
@@ -67,7 +68,7 @@ _RULES: list[tuple[str, list[tuple[str, float]]]] = [
         (r"\bused in cloud\b", 2), (r"\baccess keys?\b", 1), (r"\bimds\b", 1), (r"\bkeys? .* (used|seen)\b", 1),
     ]),
     ("cloud_activity_related_to_endpoint", [
-        (r"\bcloud api\b", 3), (r"\bapi (activity|calls?)\b", 2), (r"\bactivity\b", 1), (r"\brelated to\b", 2),
+        (r"\bcloud api\b", 3), (r"\bapi (activity|calls?)\b", 2), (r"\bactivity\b", 1), (r"\brelated to\b", 1),
         (r"\bendpoint detection", 2), (r"\bcloudtrail\b", 2), (r"\bfrom the \w+ role\b", 1),
     ]),
     ("blast_radius_of_alert", [
@@ -117,6 +118,10 @@ _RULES: list[tuple[str, list[tuple[str, float]]]] = [
         (r"\b(list|which|what|show|any)\b.*\b(storylines|incidents|intrusions|campaigns are)\b", 3), (r"\bactive (incidents|storylines|intrusions)\b", 3),
         (r"\bhow many (storylines|incidents)\b", 3),
     ]),
+    ("alerts_on_entity", [
+        (r"\balerts?\b.*\b(on|for|against|affecting|hitting|involving)\b", 3), (r"\b(which|what|any|list|show|how many)\b.*\b(alerts?|detections?|findings?)\b", 2),
+        (r"\b(detections?|findings?)\b.*\b(on|for|against)\b", 2), (r"\bsit(s|ting)? on\b", 1), (r"\balerts? (are )?(there )?(on|for)\b", 2),
+    ]),
     ("neighborhood_of_entity", [
         (r"\bneighbou?rhood\b", 4), (r"\b(what is|what'?s|show( me)?( what is)?) connected to\b", 3), (r"\bexpand\b", 2), (r"\bconnections? (of|to|from)\b", 2),
         (r"\b(graph|nodes|edges) around\b", 3), (r"\bconnected to\b", 1),
@@ -160,8 +165,57 @@ _ACTION_RULES: list[tuple[str, str]] = [
     (r"\brevoke|\bsessions?\b", "revoke_sessions"),
 ]
 _THIS_RE = re.compile(r"\b(this|that|the selected|current|here|it)\b", re.I)
+_STOPWORDS = {
+    "a", "an", "and", "any", "are", "about", "actually", "alert", "alerts", "all", "as", "at", "be", "by", "can", "critical",
+    "describe", "details", "detection", "do", "does", "finding", "for", "from", "give", "has", "have", "how", "i", "in",
+    "into", "is", "it", "its", "know", "like", "me", "of", "on", "or", "our", "risky", "show", "tell", "that", "the",
+    "there", "these", "this", "those", "to", "us", "was", "we", "what", "what's", "whats", "which", "who", "why", "with",
+    "you", "your", "high", "medium", "low", "informational", "severity", "please", "now", "today", "really", "still",
+}
+
+
+def _tokens(text: str) -> list[str]:
+    return [t for t in re.split(r"[^a-z0-9]+", str(text).lower()) if t]
+
+
+def _notable_words(text: str) -> list[str]:
+    """Words worth searching for: not stopwords, at least three characters (or containing a digit)."""
+    out: list[str] = []
+    for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", text):
+        lw = w.lower().strip(".:/-")
+        if not lw or lw in _STOPWORDS or (len(lw) < 3 and not any(ch.isdigit() for ch in lw)):
+            continue
+        if lw not in out:
+            out.append(lw)
+    return out
+
+
+def _hit_overlap(hit: Mapping[str, Any], words: Iterable[str]) -> int:
+    """How many query tokens occur verbatim (or as a >= 4 char prefix) in a search hit's name / snippet / id tail."""
+    hay = set(_tokens(str(hit.get("name", "")))) | set(_tokens(str(hit.get("snippet") or ""))) | set(_tokens(str(hit.get("id", "")).split(":")[-1]))
+    qtoks = {t for w in words for t in _tokens(w) if t not in _STOPWORDS}
+    return sum(1 for t in qtoks if t in hay or (len(t) >= 4 and any(h.startswith(t) for h in hay)) or (len(t) >= 5 and any(t in h for h in hay)))
 
 IDENTITY_LABELS = {"IamRole", "IamUser", "HumanUser", "ServiceAccount", "Group"}
+_LINKABLE_LABELS = ["Endpoint", "VirtualMachine", "Workload", "IamRole", "IamUser", "HumanUser", "ServiceAccount", "StorageBucket", "Database", "Secret", "Application"]
+_LABEL_HINTS: dict[str, tuple[str, ...]] = {
+    "bucket": ("StorageBucket",), "database": ("Database",), "db": ("Database",), "secret": ("Secret",), "role": ("IamRole",),
+    "user": ("HumanUser", "IamUser"), "account": ("ServiceAccount", "IamUser", "HumanUser"), "host": ("VirtualMachine", "Endpoint"),
+    "vm": ("VirtualMachine",), "instance": ("VirtualMachine",), "server": ("VirtualMachine", "Endpoint"), "workstation": ("Endpoint",),
+    "laptop": ("Endpoint",), "endpoint": ("Endpoint",), "app": ("Application",), "application": ("Application",),
+}
+ENTITY_INTENTS = {"alerts_on_entity", "what_is_entity", "neighborhood_of_entity", "blast_radius_of_alert", "identity_footprint", "containment_simulation", "attack_path_from_alert"}
+_QUESTION_VOCAB = {
+    "attacker", "reach", "reached", "reaches", "blast", "radius", "footprint", "host", "hosts", "identity", "identities", "role",
+    "roles", "user", "users", "bucket", "buckets", "storyline", "storylines", "incident", "incidents", "many", "sit", "sits",
+    "connected", "everything", "neighborhood", "neighbourhood", "path", "paths", "attack", "risk", "data", "regulated",
+    "sensitive", "crown", "jewel", "jewels", "cloud", "api", "activity", "endpoint", "endpoints", "related", "hours", "last",
+    "open", "rank", "vendor", "contextual", "explain", "top", "trace", "full", "credential", "credentials", "stolen", "calls",
+    "seen", "current", "match", "matches", "iocs", "ttps", "report", "touch", "only", "assets", "asset", "hide", "else",
+    "public", "actor", "actors", "isolate", "rotate", "contain", "breaks", "break", "internet", "exposed", "vuln",
+    "vulnerability", "exploiting", "fintechs", "fintech", "right", "compromised", "fully", "around", "expand", "connections",
+    "nodes", "edges", "graph", "server", "machine", "instance", "workstation", "laptop", "resource", "entity", "node",
+}
 HOST_LABELS = {"Endpoint", "VirtualMachine", "Workload", "ServerlessFunction", "KubernetesCluster"}
 DATA_LABELS = {"StorageBucket", "Database", "Secret"}
 TI_LABELS = {"ThreatActor", "Campaign", "IntelReport", "Malware", "Indicator"}
@@ -229,6 +283,7 @@ class Draft:
     followups: list[str] = field(default_factory=list)
     confidence: float = 0.7
     focus: list[str] = field(default_factory=list)
+    intent: str | None = None  # set by playbooks that degrade to another intent (e.g. ``help``)
 
 
 # ----------------------------------------------------------------------------- formatting helpers
@@ -377,6 +432,32 @@ class _Run:
         data = self.result("search_entities", query=query, labels=list(labels) if labels else None, limit=limit)
         return [dict(h) for h in data.get("hits") or [] if isinstance(h, Mapping)]
 
+    def alert_by_text(self, phrase: str, *, min_overlap: int = 1) -> dict[str, Any] | None:
+        """Find the alert a free-text phrase refers to ("S3 bucket public", "EICAR test file", "impossible travel").
+
+        ``list_alerts(q=...)`` is a substring filter, so it is tried first with the phrase and then the token search
+        (``search_entities`` over Alert nodes) whose best hit must share at least ``min_overlap`` notable words with
+        the phrase - guarding against a random alert winning on a single common token.
+        """
+        phrase = phrase.strip()
+        if not phrase:
+            return None
+        words = _notable_words(phrase)
+        data = self.result("list_alerts", q=phrase, sort="contextual", limit=5)
+        items = [a for a in data.get("items") or [] if isinstance(a, Mapping)]
+        if items:
+            return dict(items[0])
+        hits = self.search_all(" ".join(words) or phrase, ["Alert"], limit=8)
+        if not hits:
+            return None
+        qtoks = {t for w in words for t in _tokens(w) if t not in _STOPWORDS}
+        need = max(min_overlap, min(2, len(qtoks))) if qtoks else 1
+        scored = sorted(((_hit_overlap(h, words), float(h.get("score") or 0), h) for h in hits), key=lambda t: (-t[0], -t[1]))
+        overlap, _score, best = scored[0]
+        if overlap < need:
+            return None
+        return {"id": best["id"], "title": best.get("name"), "label": best.get("label")}
+
 
 # ----------------------------------------------------------------------------- the analyst
 
@@ -398,6 +479,7 @@ class OfflineAnalyst:
             "alerts_reaching_crown_jewels": self._pb_alerts_reaching_crown_jewels,
             "is_alert_actually_risky": self._pb_is_alert_risky,
             "containment_simulation": self._pb_containment,
+            "alerts_on_entity": self._pb_alerts_on_entity,
             "what_is_entity": self._pb_what_is,
             "neighborhood_of_entity": self._pb_neighborhood,
             "why_is_alert_risky": self._pb_why_risky,
@@ -436,6 +518,13 @@ class OfflineAnalyst:
                 return "why_is_alert_risky"
             if label == "Storyline":
                 return "summarize_storyline"
+        if intent == "alerts_on_entity":
+            if label in TI_LABELS or (not primary and _CAPS_BIGRAM_RE.search(question)):
+                return "ioc_ttp_matches_for_actor_or_report"
+            if label == "Storyline":
+                return "summarize_storyline"
+            if label == "Alert" and not slots.hosts():
+                return "why_is_alert_risky"
         if intent == "summarize_storyline" and not slots.storylines and not context.get("storyline_id"):
             if slots.alerts:
                 return "why_is_alert_risky"
@@ -537,6 +626,22 @@ class OfflineAnalyst:
             if hit and str(hit.get("name", "")).lower() == word.lower():
                 slots.add(hit["id"], hit["label"])
 
+        # last resort for entity-centric questions: plain words that name something ("the bastion", "cardholder vault")
+        if not slots.primary() and intent in ENTITY_INTENTS:
+            words = [w for w in _notable_words(q) if w not in _QUESTION_VOCAB and not _ALERT_REF_RE.fullmatch(w)]
+            preferred = {lbl for hint, lbls in _LABEL_HINTS.items() if re.search(rf"\b{hint}s?\b", q, re.I) for lbl in lbls}
+            candidates: dict[str, dict[str, Any]] = {}
+            for word in words[:3]:
+                for h in run.search_all(word, sorted(preferred) if preferred else _LINKABLE_LABELS, limit=6):
+                    candidates.setdefault(h["id"], h)
+            ranked = sorted(
+                ((_hit_overlap(h, words), 0 if h.get("label") in preferred else 1, float(h.get("score") or 0), h) for h in candidates.values()),
+                key=lambda t: (-t[0], t[1], -t[2]),
+            )
+            if ranked and ranked[0][0] >= 1:
+                best = ranked[0][3]
+                slots.add(best["id"], best.get("label"))
+
         # canvas context
         ctx_alert = context.get("alert_id")
         if ctx_alert and (not slots.alerts or _THIS_RE.search(q)):
@@ -571,13 +676,14 @@ class OfflineAnalyst:
         except Exception as exc:  # a playbook must never crash the chat; degrade to a cited partial answer
             log.exception("offline playbook %s failed", intent)
             draft = Draft(summary=f"The `{intent}` playbook failed while querying the graph ({type(exc).__name__}: {exc}).", confidence=0.2, followups=DEMO_QUESTIONS[:3])
-        # validate cited ids against the evidence set
+        intent = draft.intent or intent
+        # validate cited ids against the evidence set (ids returned by the tools of this turn)
         findings: list[Finding] = []
         for f in draft.findings:
             kept, _dropped = run.evidence.validate_ids(f.evidence_ids)
             findings.append(Finding(statement=f.statement, severity=f.severity, evidence_ids=kept))
         narrative = _compose(draft)
-        frag = run.evidence.fragment
+        frag = self._complete_evidence(run, findings, draft.focus, emit)
         focus = [i for i in dict.fromkeys(draft.focus) if i in run.evidence.ids and "|" not in i]
         if focus:
             frag = frag.model_copy(update={"focus": list(dict.fromkeys([*focus, *frag.focus]))[:50]})
@@ -587,6 +693,41 @@ class OfflineAnalyst:
             narrative_md=narrative, findings=findings, evidence=frag, confidence=max(0.0, min(1.0, draft.confidence)),
             followups=draft.followups[:3], tool_calls=list(run.tool_calls), mode="offline", intent=intent, model=None,
         )
+
+    def _complete_evidence(self, run: _Run, findings: Sequence[Finding], focus: Sequence[str], emit: EventSink) -> Any:
+        """Make sure every cited node is present in the evidence fragment.
+
+        Tool results such as ``list_alerts`` or ``list_storylines`` expose citable ids (alert ids, entity ids) without
+        returning the node itself; the UI highlights evidence by node id, so the missing nodes are looked up in the
+        store (not a tool call) and merged in, together with cited edges whose endpoints are present.
+        """
+        frag = run.evidence.fragment
+        present = {n.id for n in frag.nodes}
+        cited = [i for f in findings for i in f.evidence_ids] + [i for i in focus if i in run.evidence.ids]
+        missing_nodes = [i for i in dict.fromkeys(cited) if "|" not in i and i not in present][:80]
+        if missing_nodes:
+            try:
+                extra = self.registry.node_outs(missing_nodes)
+            except Exception as exc:  # pragma: no cover - defensive: evidence completion must never break an answer
+                log.debug("evidence completion failed: %s", exc)
+                extra = []
+            if extra:
+                frag = frag.model_copy(update={"nodes": [*frag.nodes, *extra]})
+                present.update(n.id for n in extra)
+        present_edges = {e.id for e in frag.edges}
+        new_edges = []
+        for eid in dict.fromkeys(i for i in cited if "|" in i and i not in present_edges):
+            e = edge_out_from_id(eid)
+            if e is not None and e.src in present and e.dst in present:
+                new_edges.append(e)
+        if new_edges:
+            frag = frag.model_copy(update={"edges": [*frag.edges, *new_edges]})
+        if (missing_nodes and len(frag.nodes) > len(run.evidence.fragment.nodes)) or new_edges:
+            added = frag.model_copy(update={"nodes": frag.nodes[len(run.evidence.fragment.nodes):], "edges": new_edges, "paths": [], "focus": []})
+            if added.nodes or added.edges:
+                emit(ChatEvent(type="evidence", data=added.model_dump(mode="json")))
+        run.evidence.fragment = frag
+        return frag
 
     # -------------------------------------------------------------- shared steps
 
@@ -642,10 +783,9 @@ class OfflineAnalyst:
                 if data.get("alert"):
                     return dict(data)
         for quoted in slots.quoted[:2]:
-            data = run.result("list_alerts", q=quoted, sort="contextual", limit=5)
-            items = data.get("items") or []
-            if items:
-                full = run.result("get_alert", alert_id=items[0]["id"])
+            hit = run.alert_by_text(quoted)
+            if hit:
+                full = run.result("get_alert", alert_id=hit["id"])
                 if full.get("alert"):
                     return dict(full)
         return None
@@ -657,7 +797,11 @@ class OfflineAnalyst:
     # -------------------------------------------------------------- playbooks (demo questions 1-12)
 
     def _pb_blast_radius(self, run: _Run, question: str, slots: Slots, context: Mapping[str, Any]) -> Draft:
-        alert_data = self._resolve_alert(run, slots, question, context)
+        # "the credential-dumping alert on BAS-01" is about an alert; "from WKS-3391" / "from this host" is about the host
+        wants_alert = bool(slots.alerts) or bool(re.search(r"\b(alert|detection|finding|incident)s?\b", question, re.I))
+        if not slots.hosts() and not slots.alerts and context.get("alert_id"):
+            wants_alert = True
+        alert_data = self._resolve_alert(run, slots, question, context) if wants_alert else None
         root_id: str | None = None
         root_desc = ""
         alert: dict[str, Any] = {}
@@ -1134,12 +1278,17 @@ class OfflineAnalyst:
     def _pb_is_alert_risky(self, run: _Run, question: str, slots: Slots, context: Mapping[str, Any]) -> Draft:
         alert_data = self._resolve_alert(run, slots, question, context)
         if not alert_data:
-            # try free-text search over the question's notable words
-            for phrase in slots.quoted or re.findall(r"\b(public|bucket|eicar|psexec|impossible travel|beacon)\b", question, re.I):
-                data = run.result("list_alerts", q=phrase, sort="contextual", limit=5)
-                if data.get("items"):
-                    alert_data = run.result("get_alert", alert_id=data["items"][0]["id"])
-                    break
+            # free-text fallbacks: quoted phrases, well-known finding families, then the question's notable words
+            candidates: list[str] = list(slots.quoted[:2])
+            candidates += re.findall(r"\b(public (?:read|bucket|s3)|s3 bucket|eicar|psexec|impossible travel|beacon|web ?shell|lsass|imds|metadata)\b", question, re.I)
+            candidates.append(" ".join(_notable_words(question)[:6]))
+            for phrase in dict.fromkeys(c for c in candidates if c.strip()):
+                hit = run.alert_by_text(phrase, min_overlap=2 if len(_notable_words(phrase)) > 1 else 1)
+                if hit:
+                    alert_data = run.result("get_alert", alert_id=hit["id"])
+                    if alert_data.get("alert"):
+                        break
+                    alert_data = None
         if not alert_data:
             return self._pb_help(run, question, slots, context, note="Quote the finding's title or give its alert id (e.g. 'S3 bucket allows public read' or iss-n002).")
         alert = self._alert_of(alert_data)
@@ -1242,12 +1391,60 @@ class OfflineAnalyst:
 
     # -------------------------------------------------------------- generic playbooks
 
+    def _pb_alerts_on_entity(self, run: _Run, question: str, slots: Slots, context: Mapping[str, Any]) -> Draft:
+        targets = slots.hosts() or slots.identities or slots.data_stores or ([slots.primary()] if slots.primary() else [])
+        if not targets:
+            return self._pb_help(run, question, slots, context, note="Name the host, identity or resource whose alerts you want (e.g. 'which alerts sit on stmt-render-2a?').")
+        alerts: dict[str, dict[str, Any]] = {}
+        primary_card: dict[str, Any] = {}
+        for t in targets[:3]:
+            card = run.result("get_entity", id=t)
+            if not primary_card and card.get("node"):
+                primary_card = card
+            for a in card.get("alerts") or []:
+                if isinstance(a, Mapping) and a.get("id"):
+                    alerts.setdefault(str(a["id"]), dict(a))
+        node = primary_card.get("node") or {}
+        query = slots.host_tokens[0] if slots.host_tokens else str(node.get("name") or "")
+        if query:
+            listed = run.result("list_alerts", q=query, sort="contextual", limit=25)
+            for a in listed.get("items") or []:
+                if not isinstance(a, Mapping) or not a.get("id"):
+                    continue
+                if a.get("entity_id") in targets or str(a.get("hostname") or "").lower() == query.lower() or str(a.get("entity_name") or "").lower() == query.lower():
+                    alerts.setdefault(str(a["id"]), dict(a))
+        items = sorted(alerts.values(), key=lambda a: (-int(a.get("contextual_score") or 0), str(a.get("detected_at") or "")))
+        desc = _node_ref(node) if node else ", ".join(_b(t) for t in targets)
+        draft = Draft(summary=f"**{len(items)} alert(s)** on {desc}" + (f" (highest contextual score {items[0].get('contextual_score')})." if items else "."), focus=[*targets, *[a["id"] for a in items[:5]]])
+        for a in items[:10]:
+            reasons = ", ".join(a.get("graph_reasons") or [])
+            draft.findings.append(Finding(statement=f"{_alert_ref(a)}" + (f" - {reasons}" if reasons else "") + ".", severity=a.get("contextual_band") if a.get("contextual_band") in ("low", "medium", "high", "critical") else None, evidence_ids=[a["id"]] + ([a["entity_id"]] if a.get("entity_id") else [])))
+        if not items:
+            draft.findings.append(Finding(statement=f"No alert is currently attached to {desc}.", severity="low", evidence_ids=[t for t in targets if t in run.evidence.ids]))
+        storylines = sorted({a.get("storyline_id") for a in items if a.get("storyline_id")})
+        if storylines:
+            draft.findings.append(Finding(statement="Storylines these alerts belong to: " + ", ".join(_b(sid) for sid in storylines) + ".", severity="high", evidence_ids=list(storylines)))
+        draft.evidence_lines = [f"- Target: {desc}"] + [f"- {_alert_ref(a)}" for a in items[:10]]
+        techs = sorted({str(t) for a in items for t in a.get("techniques") or []})
+        draft.impact_lines = [
+            f"- Techniques observed: {', '.join(techs[:12]) or 'none'}." + (" The alerts are correlated into a storyline - treat them as one incident." if storylines else ""),
+            f"- {sum(1 for a in items if a.get('reaches_crown_jewel'))} of {len(items)} alert(s) sit on an asset with a path to a crown jewel.",
+        ]
+        draft.actions = [f"Open {_b(items[0]['id'])} first; it carries the highest contextual score." if items else f"Nothing to triage on {desc} right now.", f"Run the blast radius of {_b(targets[0])} to see what the alerts put at risk."]
+        draft.followups = [f"What can an attacker reach from `{targets[0]}`?", f"Why is `{items[0]['id']}` risky?" if items else DEMO_QUESTIONS[5], DEMO_QUESTIONS[11]]
+        draft.confidence = 0.85 if items else 0.6
+        return draft
+
     def _pb_what_is(self, run: _Run, question: str, slots: Slots, context: Mapping[str, Any]) -> Draft:
         node_id = slots.primary()
         if not node_id:
-            words = [w for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9._:-]{2,}", question) if w.lower() not in {"what", "is", "who", "tell", "me", "about", "describe", "the", "this", "that"}]
-            hit = run.search(" ".join(words[:3])) if words else None
-            node_id = hit["id"] if hit else None
+            words = _notable_words(question)
+            hits = run.search_all(" ".join(words[:4]), limit=8) if words else []
+            # only accept a hit that shares a real word with the question (never bind "what is the weather" to a node
+            # that merely contains "the")
+            ranked = sorted(((_hit_overlap(h, words), float(h.get("score") or 0), h) for h in hits), key=lambda t: (-t[0], -t[1]))
+            if ranked and ranked[0][0] >= 1:
+                node_id = ranked[0][2]["id"]
         if not node_id:
             return self._pb_help(run, question, slots, context, note="I could not resolve that entity; try a node id or an exact hostname.")
         card = run.result("get_entity", id=node_id)
@@ -1359,9 +1556,9 @@ class OfflineAnalyst:
         return draft
 
     def _pb_help(self, run: _Run, question: str, slots: Slots, context: Mapping[str, Any], note: str | None = None) -> Draft:
-        draft = Draft(summary=(note + " " if note else "") + "I am the Throughline analyst (offline mode). I answer graph questions about Larkspur's alerts, assets, identities, data and threat intel with cited node ids.", confidence=0.2)
+        draft = Draft(summary=(note + " " if note else "") + "I am the Throughline analyst (offline mode). I answer graph questions about Larkspur's alerts, assets, identities, data and threat intel with cited node ids.", confidence=0.2, intent="help")
         draft.findings = [Finding(statement=f"Try: {q}") for q in DEMO_QUESTIONS[:6]]
-        draft.evidence_lines = ["- Intents I understand: " + ", ".join(f"`{intent}`" for intent, _q, _t in PLAYBOOK_HINTS) + ", `what_is_entity`, `neighborhood_of_entity`, `why_is_alert_risky`, `summarize_storyline`, `list_storylines`."]
+        draft.evidence_lines = ["- Intents I understand: " + ", ".join(f"`{intent}`" for intent, _q, _t in PLAYBOOK_HINTS) + ", `alerts_on_entity`, `what_is_entity`, `neighborhood_of_entity`, `why_is_alert_risky`, `summarize_storyline`, `list_storylines`."]
         draft.impact_lines = ["- Name hosts (BAS-01, WKS-3391), alert ids (ldt-a009), roles (LarkspurBastionSSMRole), buckets, actors (Cinder Jackal) or select something on the canvas and say 'this alert'."]
         draft.actions = ["Ask one of the questions above, or select an alert and ask 'why is this alert risky?'."]
         draft.followups = [DEMO_QUESTIONS[1], DEMO_QUESTIONS[4], DEMO_QUESTIONS[5]]

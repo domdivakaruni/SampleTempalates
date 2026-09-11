@@ -353,6 +353,128 @@ def test_iam_realism(generated: dict) -> None:
     assert all(n["props"]["public_ip"] or n["props"].get("public_ports") for n in exposed)
 
 
+# ---------------------------------------------------------------------------- posture realism
+
+
+def test_question5_result_set_is_exactly_the_eight_scripted_hosts(generated: dict) -> None:
+    """Internet-exposed compute carrying a CVE the TI stage tracks (active / mass exploitation / public PoC)."""
+    from throughline.simulator.inventory.vulns import TI_TRACKED_COMPONENTS
+    from throughline.simulator.threat_intel.catalog import EXPLOITS
+
+    assert {CVES[e.cve_id].component for e in EXPLOITS} <= TI_TRACKED_COMPONENTS, "TI catalog drifted; extend TI_TRACKED_COMPONENTS"
+    exposed = {e["dst"] for e in _edges(generated, "EXPOSES")}
+    tracked = {c.node_id for c in CVES.values() if c.component in TI_TRACKED_COMPONENTS}
+    hits = {e["src"] for e in _edges(generated, "VULNERABLE_TO") if e["src"] in exposed and e["dst"] in tracked}
+    assert hits == {
+        sc.EDGE_VM, sc.STG_EDGE_VM, sc.DEV_LOG4J_VM, "vm:aws:i-0ns1c3d5e7f9a1b3c5", "vm:aws:i-0pan2d4f6a8c0e2a4b",
+        "vm:aws:i-0spr3e5a7c9b1d3f5e", "vm:aws:i-0jnk4f6b8d0c2e4a6c", "vm:aws:i-0cnf5a7c9e1d3b5f7a",
+    }
+    # the tracked components still show up on internal assets (TI exposure panel at lower exposure)
+    assert any(e["src"] not in exposed and e["dst"] in tracked for e in _edges(generated, "VULNERABLE_TO"))
+
+
+def test_toxic_combinations(generated: dict) -> None:
+    by_id = generated["by_id"]
+    exposed = {e["dst"] for e in _edges(generated, "EXPOSES") if by_id[e["dst"]]["label"] in ("VirtualMachine", "Workload", "ServerlessFunction")}
+    crit: dict[str, list[str]] = {}
+    for e in _edges(generated, "VULNERABLE_TO"):
+        if CVES[e["dst"].split(":", 1)[1]].cvss >= 9.0:
+            crit.setdefault(e["src"], []).append(e["dst"])
+    sensitive = {e["src"] for e in _edges(generated, "CAN_ACCESS") if by_id[e["dst"]]["props"].get("sensitivity") in ("high", "critical")}
+    toxic = sorted(a for a in exposed if a in crit and a in sensitive)
+    prod_staging = [a for a in toxic if by_id[a]["props"].get("environment") in ("prod", "staging")]
+    assert 15 <= len(prod_staging) <= 60, len(prod_staging)
+    assert sc.EDGE_VM in prod_staging and sc.LOG4SHELL in crit[sc.EDGE_VM]
+    assert all(sc.LOG4SHELL not in crit[a] for a in toxic if a != sc.EDGE_VM), "only stmt-render-2a combines exposure, Log4Shell and sensitive reach"
+    assert sc.APP_CONFIG_BUCKET in {e["dst"] for e in _edges(generated, "CAN_ACCESS", src=sc.EDGE_VM)}
+    # every toxic combination surfaces as a critical CSPM issue on that asset, and only those do
+    toxic_alerts = {a["props"]["entity_id"]: a for a in generated["nodes"] if a["label"] == "Alert" and a["props"]["title"].startswith("Toxic combination")}
+    assert set(toxic_alerts) == set(toxic)
+    assert all(a["props"]["vendor_severity"] == "critical" and a["props"]["raw"]["type"] == "TOXIC_COMBINATION" for a in toxic_alerts.values())
+    assert len({by_id[a]["label"] for a in toxic}) >= 2 or len(toxic) >= 20
+
+
+def test_every_inventory_owned_storyline_constant_exists_once(generated: dict) -> None:
+    prefixes = ("vm:", "role:", "policy:", "bucket:", "secret:", "database:", "sg:", "subnet:", "image:", "package:", "endpoint:", "user:", "identity:", "team:", "app:", "group:", "account:", "alert:cspm:")
+    named = {k: v for k, v in vars(sc).items() if isinstance(v, str) and v.startswith(prefixes)}
+    named.update({f"account_{k}": v["id"] for k, v in sc.ACCOUNTS.items()})
+    named["alert_n002"] = sc.ALERT_N["n002"][0]
+    assert len(named) >= 50
+    ids = [n["id"] for n in generated["nodes"]]
+    story = json.loads((generated["out"] / "inventory.json").read_text())["storyline"]
+    story_values = set(story.values())
+    for key, nid in named.items():
+        assert ids.count(nid) == 1, (key, nid)
+        assert nid in story_values, (key, nid)
+    foreign = ("cve:", "technique:", "actor:", "campaign:", "malware:", "ioc:", "report:", "process:", "file:", "logon:", "credential:", "cloudevent:", "incident:", "storyline:", "ip:", "domain:")
+    assert not any(n["id"].startswith(foreign) for n in generated["nodes"]), "inventory emitted a node another stage owns"
+    assert not any(n["label"] == "Alert" and n["props"]["source_system"] != "cspm" for n in generated["nodes"])
+
+
+# ---------------------------------------------------------------------------- consumers and feeds
+
+
+def test_index_loads_through_events_stage_loader(generated: dict) -> None:
+    from throughline.simulator.events import resolve_inventory
+    from throughline.simulator.events.inventory_stub import FLEET_ENDPOINT_FLOOR
+
+    out: Path = generated["out"]
+    inv = resolve_inventory(out / "inventory.json", out)
+    assert inv.source == str(out / "inventory.json")
+    n_endpoints = sum(1 for n in generated["nodes"] if n["label"] == "Endpoint")
+    assert len(inv.endpoints) == n_endpoints >= FLEET_ENDPOINT_FLOOR, "a full inventory must not be padded with a synthetic fleet"
+    assert inv.get(sc.BASTION_VM)["endpoint_id"] == sc.EP_BASTION and inv.get(sc.BASTION_VM)["role_ids"] == [sc.BASTION_ROLE]
+    assert inv.endpoint(sc.WKS_DANA)["primary_user_id"] == sc.USER_DANA
+    assert inv.user(sc.USER_DANA)["endpoint_id"] == sc.WKS_DANA and inv.user(sc.USER_DANA)["login"] == "dwhitfield"
+    internet = {v["id"] for v in inv.internet_vms()}
+    assert sc.EDGE_VM in internet and sc.BASTION_VM not in internet
+    assert {e["id"] for e in inv.workstations()} >= {sc.WKS_DANA, sc.EP_MREYES, sc.EP_PKAUR}
+    assert {e["id"] for e in inv.servers()} >= {sc.EP_BASTION, sc.EP_EDGE, sc.EP_DEV_SANDBOX, sc.EP_FILESHARE}
+    assert {s["id"] for s in inv.service_accounts} >= {sc.SVC_FINOPS_SFTP}
+    assert set(inv.account_ids) == {a["id"] for a in sc.ACCOUNTS.values()}
+    # every id the index declares resolves to a node this stage emitted, so events edges targeting them survive the merge
+    assert inv.all_node_ids() <= set(generated["by_id"]) | {sc.LOG4SHELL}
+
+
+def test_raw_feed_shapes(generated: dict) -> None:
+    out: Path = generated["out"]
+    devices = read_jsonl(out / "raw" / "falcon" / "devices.jsonl")
+    required = {"device_id", "hostname", "local_ip", "external_ip", "os_version", "platform_name", "agent_version", "last_seen", "service_provider", "service_provider_account_id", "instance_id", "site_name", "ou", "tags"}
+    assert all(required <= set(d) for d in devices)
+    assert len(devices) == sum(1 for n in generated["nodes"] if n["label"] == "Endpoint")
+    bas = next(d for d in devices if d["device_id"] == "aid-bas01")
+    assert bas["instance_id"] == sc.BASTION_INSTANCE_ID and bas["service_provider"] == "AWS_EC2_V2" and bas["service_provider_account_id"] == "222222222222"
+    assert bas["platform_name"] == "Linux" and bas["local_ip"] == sc.BASTION_PRIVATE_IP and bas["hostname"] == "bas-01"
+    dana = next(d for d in devices if d["device_id"] == "aid-wks3391")
+    assert dana["platform_name"] == "Windows" and dana["site_name"] == "Boston office" and dana["ou"].startswith("OU=Workstations")
+    users = read_jsonl(out / "raw" / "okta" / "users.jsonl")
+    assert len(users) == sum(1 for n in generated["nodes"] if n["label"] == "HumanUser")
+    okta_dana = next(u for u in users if u["profile"]["login"] == "dwhitfield")
+    assert okta_dana["profile"]["email"] == "dwhitfield@corp.larkspur.example" and okta_dana["status"] == "ACTIVE" and "finance-treasury" in okta_dana["groups"]
+    issues = read_jsonl(out / "raw" / "wiz" / "issues.jsonl")
+    assert len(issues) == sum(1 for n in generated["nodes"] if n["label"] == "Alert")
+    n002 = next(i for i in issues if i["id"] == "iss-n002")
+    assert n002["severity"] == "CRITICAL" and n002["sourceRule"]["name"] == "S3 bucket allows public read" and n002["entitySnapshot"]["graphEntityId"] == sc.MARKETING_BUCKET
+    resources = read_jsonl(out / "raw" / "wiz" / "cloud_resources.jsonl")
+    assert any(r["graphEntityId"] == sc.BASTION_VM and r["type"] == "VIRTUAL_MACHINE" and sc.BASTION_ROLE_ARN in r["properties"]["instanceProfileRoles"] for r in resources)
+    vulns = read_jsonl(out / "raw" / "wiz" / "vulnerabilities.jsonl")
+    assert any(v["name"] == "CVE-2021-44228" and v["vulnerableAsset"]["graphEntityId"] == sc.EDGE_VM and v["vulnerableAsset"]["isInternetFacing"] for v in vulns)
+    iam = read_jsonl(out / "raw" / "wiz" / "iam.jsonl")
+    reader = next(r for r in iam if r["graphEntityId"] == sc.PROD_READER_ROLE)
+    assert reader["trustPolicy"]["Statement"][0]["Principal"] == {"AWS": sc.BASTION_ROLE_ARN}
+    network = read_jsonl(out / "raw" / "wiz" / "network.jsonl")
+    assert any(r.get("type") == "NETWORK_EXPOSURE" and r["resource"]["graphEntityId"] == sc.EDGE_VM and r["ports"] == ["8080"] for r in network)
+
+
+def test_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from throughline.simulator.inventory.__main__ import main
+
+    assert main(["--out", str(tmp_path), "-q"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["out"] == str(tmp_path) and summary["counts"]["nodes"]["VirtualMachine"] > 0
+    assert (tmp_path / "graph" / "inventory_nodes.jsonl").exists() and (tmp_path / "inventory.json").exists()
+
+
 # ---------------------------------------------------------------------------- index and determinism
 
 

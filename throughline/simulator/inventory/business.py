@@ -489,6 +489,7 @@ APP_BY_SLUG: dict[str, AppSpec] = {a.slug: a for a in APPS}
 
 def build_apps(inv: Inventory, world: World) -> list[AppSpec]:
     for a in APPS:
+        a.resources = {}  # the catalog is module-level; a fresh run must not inherit the previous run's placement
         team = TEAM_BY_SLUG[a.team]
         inv.add_node(
             a.id, "Application", a.name,

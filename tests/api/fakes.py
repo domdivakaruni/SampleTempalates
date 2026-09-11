@@ -234,7 +234,8 @@ def build_fixture_graph() -> ContextGraph:
         _n(C.LOG4SHELL, "Vulnerability", "CVE-2021-44228", source="ti-sim", cve_id="CVE-2021-44228", cvss=10.0, epss=0.97, kev=True, severity="critical", exploitation_status="mass_exploitation", actor_interest=[C.ACTOR_HT], sector_targeting_relevance=0.8, ti_report_ids=[C.REPORT_SALTWORKS], affected_component="log4j-core"),
         _n(C.EDGE_LOG4J_PACKAGE, "Package", "log4j-core 2.14.1", package_name="log4j-core", version="2.14.1", ecosystem="maven", scope=C.EDGE_VM),
     ]
-    for tid in sorted(set(C.CJ_TECHNIQUES + C.HT_TECHNIQUES)):
+    all_techniques = set(C.CJ_TECHNIQUES + C.HT_TECHNIQUES) | {t for row in ALERT_ROWS.values() for t in row[4]}
+    for tid in sorted(all_techniques):
         nodes.append(_n(TECH.format(tid), "AttackTechnique", tid, source="ti-sim", technique_id=tid, tactic="n/a", kill_chain_stage=1))
     for aid in ALERT_ROWS:
         nodes.append(_alert_node(aid))
@@ -659,7 +660,7 @@ class FakeEngine:
         reports: dict[str, NodeOut] = {}
         allowed = set(matched_from) if matched_from is not None else None
         for ioc in inds:
-            for u, d in self.g.in_edges(ioc, ["MATCHES_IOC"]):
+            for u, _d in self.g.in_edges(ioc, ["MATCHES_IOC"]):
                 if allowed is not None and u not in allowed:
                     continue
                 matches.append(TIMatch(indicator_id=ioc, ioc_type=str(self.g.get(ioc, "ioc_type")), value=str(self.g.get(ioc, "value")), confidence=float(self.g.get(ioc, "confidence") or 0.8), matched_node_id=u, matched_label=self.g.label_of(u) or "", actor_id=self.g.get(ioc, "actor_id"), campaign_id=self.g.get(ioc, "campaign_id"), malware_id=self.g.get(ioc, "malware_id"), report_id=self.g.get(ioc, "report_id")))

@@ -393,6 +393,9 @@ export interface HealthOut {
   agent_mode: AgentMode | string
   model?: string | null
   build?: Record<string, JsonValue | undefined>
+  /** Resolved mode reported by the real backend (not in the contract table; optional). */
+  analyst_mode?: AgentMode | string | null
+  error?: string | null
 }
 
 export interface SchemaColumn { name: string; type: string }
@@ -442,6 +445,9 @@ export interface RerankExample {
   contextual_score: number
   vendor_rank_position: number
   contextual_rank_position: number
+  /** Extras emitted by the backend (throughline/analytics/questions.py); optional in the contract. */
+  direction?: 'up' | 'down'
+  graph_reasons?: string[]
 }
 
 export interface DashboardOut {
@@ -518,11 +524,15 @@ export interface ActorListItem {
   matched_alerts: number
   exploited_cves_present: number
   affected_assets: number
+  matched_alert_ids?: string[]
+  exploited_cve_ids?: string[]
 }
 export interface ActorListOut { items: ActorListItem[] }
 
 export interface ActorDetailOut {
-  actor: NodeOut
+  /** Null when the subject is a campaign without attribution (backend `ti_campaign`). */
+  actor: NodeOut | null
+  campaign?: NodeOut | null
   campaigns: NodeOut[]
   malware: NodeOut[]
   techniques: NodeOut[]
@@ -530,6 +540,9 @@ export interface ActorDetailOut {
   reports: NodeOut[]
   context: TIContext
   affected: GraphFragment
+  matched_alert_ids?: string[]
+  affected_asset_ids?: string[]
+  exploited_cve_ids?: string[]
 }
 
 export interface ReportListOut { items: NodeOut[] }
@@ -541,7 +554,15 @@ export interface ReportDetailOut {
   cves: NodeOut[]
   indicators: NodeOut[]
   techniques: NodeOut[]
-  impact: { matched_alerts: AlertSummary[]; exposed_assets: NodeOut[]; summary: string }
+  impact: {
+    matched_alerts: AlertSummary[]
+    exposed_assets: NodeOut[]
+    summary: string
+    matched_alert_ids?: string[]
+    crown_jewels_touched?: string[]
+    ttp_overlap?: string[]
+    ttp_overlap_count?: number
+  }
 }
 
 export interface ExposureItem {
@@ -555,6 +576,9 @@ export interface ExposureItem {
   crown_jewels_reachable: NodeOut[]
   has_edr_sensor: boolean
   alert_ids: string[]
+  cves?: NodeOut[]
+  score_source?: string
+  ti_exposure_score?: number
 }
 export interface ExposureOut { items: ExposureItem[] }
 

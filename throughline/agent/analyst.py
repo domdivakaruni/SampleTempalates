@@ -1,7 +1,8 @@
 """Analyst facade: picks the LLM or the offline analyst per ``settings.agent_mode`` and key presence, streams
 ``ChatEvent``s for the chat API and records turns in the session store.
 
-Mode resolution (``resolve_mode``):
+Mode resolution (``resolve_mode``): the per-turn request wins, then the ``mode`` the ``Analyst`` was constructed
+with (``Analyst(registry, mode="offline")``), then ``settings.agent_mode``:
 
 * ``offline``            -> offline analyst.
 * ``llm``                -> Claude; on failure an ``error`` event is emitted and an error answer (mode ``llm``) is
@@ -29,6 +30,7 @@ from throughline.models import AnalystAnswer, ChatEvent, ChatMessageIn, ChatTurn
 log = logging.getLogger(__name__)
 
 EventSink = Callable[[ChatEvent], None]
+MODES = ("auto", "llm", "offline")
 _DONE = object()
 
 
@@ -38,6 +40,7 @@ class Analyst:
         registry: ToolRegistry,
         settings: Any | None = None,
         *,
+        mode: str | None = None,
         sessions: ChatSessionStore | None = None,
         llm: LLMAnalyst | None = None,
         offline: OfflineAnalyst | None = None,
@@ -47,8 +50,11 @@ class Analyst:
             from throughline.config import settings as _settings
 
             settings = _settings
+        if mode is not None and str(mode).lower() not in MODES:
+            raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
         self.registry = registry
         self.settings = settings
+        self.mode: str | None = str(mode).lower() if mode is not None else None
         self.sessions = sessions or ChatSessionStore()
         self.offline = offline or OfflineAnalyst(registry)
         self._client_factory = client_factory
@@ -61,9 +67,13 @@ class Analyst:
             return True
         return bool(getattr(self.settings, "anthropic_api_key", None) or os.environ.get("ANTHROPIC_API_KEY"))
 
+    def configured_mode(self, requested: str | None = None) -> str:
+        """The mode asked for (``auto`` / ``llm`` / ``offline``): per-turn request, constructor, then settings."""
+        return (requested or self.mode or getattr(self.settings, "agent_mode", "auto") or "auto").lower()
+
     def resolve_mode(self, requested: str | None = None) -> str:
         """Effective mode for a turn: ``"llm"`` or ``"offline"``."""
-        mode = (requested or getattr(self.settings, "agent_mode", "auto") or "auto").lower()
+        mode = self.configured_mode(requested)
         if mode == "offline":
             return "offline"
         if mode == "llm":
@@ -87,7 +97,7 @@ class Analyst:
         emit: EventSink,
         history: Sequence[ChatTurn] | None,
     ) -> AnalystAnswer:
-        explicit = (requested_mode or getattr(self.settings, "agent_mode", "auto") or "auto").lower()
+        explicit = self.configured_mode(requested_mode)
         mode = self.resolve_mode(requested_mode)
         if explicit == "llm" and mode == "offline":
             emit(ChatEvent(type="error", data={"code": "no_api_key", "message": "LLM mode requested but no Anthropic API key is configured; answering offline."}))

@@ -44,7 +44,7 @@ export function TopBar() {
             {fmtNum(health.data.total_nodes)} nodes · {fmtNum(health.data.total_edges)} edges
           </span>
         )}
-        <button type="button" onClick={toggle} className={cn('btn', open && 'border-accent/50 text-accent')} title="Toggle the Analyst drawer">
+        <button type="button" data-testid="analyst-toggle" onClick={toggle} className={cn('btn', open && 'border-accent/50 text-accent')} title="Toggle the Analyst drawer" aria-pressed={open}>
           {open ? <PanelRightClose size={13} /> : <Bot size={13} />}
           Analyst
           {streaming && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />}

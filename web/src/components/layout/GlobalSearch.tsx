@@ -56,7 +56,7 @@ export function GlobalSearch() {
     else if (hit.label === 'ThreatActor') navigate(`/threat-intel/actors/${encodeURIComponent(hit.id)}`)
     else if (hit.label === 'Campaign') navigate(`/threat-intel/campaigns/${encodeURIComponent(hit.id)}`)
     else if (hit.label === 'IntelReport') navigate(`/threat-intel/reports/${encodeURIComponent(hit.id)}`)
-    else navigate(`/explorer?seed=${encodeURIComponent(hit.id)}`)
+    else navigate(`/explorer?id=${encodeURIComponent(hit.id)}`)
   }
 
   return (

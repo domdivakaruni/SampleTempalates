@@ -3,8 +3,8 @@ import { ACCENT, FG_2, LINE } from '../theme'
 
 export const PANEL_BG = '#0d1424'
 
-/** Stylesheet for the security context graph. Classes: highlight, dim, focus, pinned, hover, show-label, cut, nolabel. */
-export function graphStylesheet(): cytoscape.Stylesheet[] {
+/** Stylesheet for the security context graph. Classes: highlight, dim, focus, pinned, hover, show-label, cut, nolabel, hidden. */
+export function graphStylesheet(): cytoscape.StylesheetStyle[] {
   const styles: { selector: string; style: Record<string, unknown> }[] = [
     {
       selector: 'node',
@@ -48,6 +48,7 @@ export function graphStylesheet(): cytoscape.Stylesheet[] {
     { selector: 'edge.highlight.show-label, edge.highlight.hover', style: { color: '#bae6fd' } },
     { selector: 'edge.dim', style: { opacity: 0.18 } },
     { selector: 'edge.cut', style: { 'line-color': '#f87171', 'target-arrow-color': '#f87171', 'line-style': 'dotted', width: 2.5 } },
+    { selector: '.hidden', style: { display: 'none' } },
   ]
-  return styles as unknown as cytoscape.Stylesheet[]
+  return styles as unknown as cytoscape.StylesheetStyle[]
 }

@@ -222,9 +222,9 @@ def _playbook_text() -> str:
     for i, (intent, question, tools) in enumerate(PLAYBOOK_HINTS, start=1):
         lines.append(f"{i}. {question}\n   intent `{intent}`: {' -> '.join(f'`{t}`' for t in tools)}")
     lines.append(
-        "Generic: 'what is X' -> `get_entity`; 'what is connected to X' -> `get_neighborhood`; 'why is this alert "
-        "risky' -> `get_alert` + `explain_risk`; 'summarize this storyline' -> `get_storyline`; 'how could X reach Y' "
-        "-> `find_paths`."
+        "Generic: 'what is X' -> `get_entity`; 'what is connected to X' -> `get_neighborhood`; 'which alerts sit on X' "
+        "-> `get_entity` + `list_alerts(q=hostname)`; 'why is this alert risky' -> `get_alert` + `explain_risk`; "
+        "'summarize this storyline' -> `get_storyline`; 'how could X reach Y' -> `find_paths`."
     )
     return "\n".join(lines)
 

@@ -67,6 +67,23 @@ RESTRICTED: set[str] = {
     "elasticsearch", "gitlab", "redis", "postgresql", "envoy",
 }
 
+# Components whose catalog CVEs carry an exploitation status in the threat-intel stage (active, mass_exploitation
+# or poc_public). They stay off internet-exposed assets other than the eight scripted hosts, so question 5
+# ("internet-exposed hosts with an actively exploited vulnerability") returns exactly those eight rows; internal
+# assets may still carry them and feed the TI exposure panel at a lower exposure. Cross-checked against the TI
+# catalog in tests/unit/test_inventory.py.
+TI_TRACKED_COMPONENTS: set[str] = {
+    "log4j-core", "citrix-netscaler-gateway", "pan-os-globalprotect", "spring-beans", "jenkins", "confluence-server",
+    "ivanti-connect-secure", "connectwise-screenconnect", "moveit-transfer", "fortios-sslvpn", "envoy", "next",
+    "kubernetes-ingress-nginx", "vpn-gateway-firmware", "gitlab", "spring-security", "pillow",
+}
+# the five scripted non-Log4Shell exposed hosts carry these; their siblings run the fixed build
+NAMED_HOST_COMPONENTS: tuple[str, ...] = ("citrix-netscaler-gateway", "pan-os-globalprotect", "spring-beans", "jenkins", "confluence-server")
+# internet-facing prod/staging services are biased towards a vulnerable OpenSSL build so the estate carries a few
+# dozen natural toxic combinations (exposed + critical CVE + sensitive data reach); the storyline hosts stay strongest
+TOXIC_IMAGE_RATE = 0.7
+TOXIC_HOST_RATE = 0.7
+
 # benign filler packages (never vulnerable): ecosystem -> [(name, version)]
 FILLER: dict[str, list[tuple[str, str]]] = {
     "maven": [("guava", "33.2.1-jre"), ("slf4j-api", "2.0.13"), ("logback-classic", "1.5.6"), ("micrometer-core", "1.13.1"), ("hibernate-core", "6.5.2.Final"), ("postgresql-jdbc", "42.7.3"), ("aws-sdk-java", "2.26.3"), ("netty-all", "4.1.111.Final"), ("kafka-clients", "3.7.0"), ("bouncycastle-bcprov", "1.78.1")],
@@ -92,7 +109,7 @@ HOST_LINUX: dict[str, float] = {"openssh-server": 4, "sudo": 2, "linux-kernel": 
 HOST_WINDOWS: dict[str, float] = {"windows-print-spooler": 3, "windows-smb": 3}
 NODE_COMPONENTS: dict[str, float] = {"linux-kernel": 3, "containerd": 3, "runc": 2, "openssh-server": 1}
 
-VULN_RATE = 0.55
+VULN_RATE = 0.65
 
 
 def ecosystem_of(component: str, fallback: str) -> str:
@@ -105,6 +122,32 @@ def ecosystem_of(component: str, fallback: str) -> str:
 
 def package_id(scope_id: str, name: str, version: str) -> str:
     return f"package:{scope_id.split(':', 1)[1]}:{name}:{version}"
+
+
+def is_exposed(inv: Inventory, asset: str) -> bool:
+    """Internet reachability from the raw facts the cloud pass left behind (posture.py later derives the ``EXPOSES``
+    edges from the same facts): a public IP behind a security group open to 0.0.0.0/0, an internet-facing load
+    balancer target, or an enabled function URL."""
+    label = inv.label(asset)
+    p = inv.props(asset)
+    meta = inv.meta[asset]
+    if label == "VirtualMachine":
+        if meta.get("lb_ports"):
+            return True
+        return bool(p.get("public_ip")) and any(inv.props(sg)["open_to_internet"] for sg in inv.out(asset, "HAS_SECURITY_GROUP"))
+    if label == "Workload":
+        return bool(meta.get("lb_ports"))
+    if label == "ServerlessFunction":
+        return bool(p.get("url_enabled"))
+    return False
+
+
+def component_pool(base: dict[str, float], exposed: bool, *, allow_restricted: bool = False) -> dict[str, float]:
+    return {k: v for k, v in base.items() if (allow_restricted or k not in RESTRICTED) and not (exposed and k in TI_TRACKED_COMPONENTS)}
+
+
+def _has_component(inv: Inventory, scope_id: str, component: str) -> bool:
+    return any(inv.props(pid).get("component") == component for pid in inv.out(scope_id, "HAS_PACKAGE"))
 
 
 def build_vulns(inv: Inventory, est: Estate) -> None:
@@ -197,7 +240,8 @@ def _storyline_packages(inv: Inventory) -> None:
             fixed = VERSIONS[comp][-1][0]
             add_package(inv, vm, comp, fixed, ecosystem_of(comp, "os"), [])
         elif comp in ("vpn-gateway-firmware", "exchange-server", "connectwise-screenconnect", "papercut-mf", "windows-netlogon") and not inv.out(vm, "HAS_PACKAGE"):
-            version, cves = VERSIONS[comp][0]
+            # legacy appliances/servers run the vulnerable build unless they face the Internet (question 5 stays at eight rows)
+            version, cves = VERSIONS[comp][-1] if is_exposed(inv, vm) else VERSIONS[comp][0]
             add_package(inv, vm, comp, version, ecosystem_of(comp, "os"), cves)
         elif name.startswith("partner-api-") and not any(inv.props(p)["package_name"] == "spring-beans" for p in inv.out(vm, "HAS_PACKAGE")):
             add_package(inv, vm, "spring-beans", "5.3.18", "maven", [])
@@ -211,14 +255,19 @@ def _image_packages(inv: Inventory, est: Estate) -> None:
         meta = est.images[image_id]
         stack = meta["stack"]
         eco = STACK_ECOSYSTEM.get(stack, "os")
-        pool = {k: v for k, v in STACK_COMPONENTS.get(stack, {}).items() if k not in RESTRICTED or stack in ("ingress", "redis")}
+        runners = inv.inn(image_id, "RUNS_IMAGE")
+        exposed = any(is_exposed(inv, a) for a in runners)
+        pool = component_pool(STACK_COMPONENTS.get(stack, {}), exposed, allow_restricted=stack in ("ingress", "redis"))
         n_stack = r.choice([1, 2, 2, 3]) if pool else 0
-        chosen = _weighted_sample(r, pool, n_stack)
-        for comp in chosen:
+        for comp in _weighted_sample(r, pool, n_stack):
             _component_package(inv, r, image_id, comp)
-        # base image package
-        for comp in _weighted_sample(r, IMAGE_BASE, 1):
-            _component_package(inv, r, image_id, comp)
+        # base image package (toxic-combination bias for internet-facing prod/staging services)
+        toxic = exposed and any(inv.meta[a].get("env") in ("prod", "staging") for a in runners) and r.random() < TOXIC_IMAGE_RATE
+        if toxic:
+            _component_package(inv, r, image_id, "openssl", force_vulnerable=True)
+        else:
+            for comp in _weighted_sample(r, IMAGE_BASE, 1):
+                _component_package(inv, r, image_id, comp)
         # filler
         fillers = FILLER.get(eco, FILLER["os"])
         for name, version in r.sample(fillers, 1):
@@ -245,6 +294,7 @@ def _host_packages(inv: Inventory, est: Estate) -> None:
         r = rng(f"inventory.vulns.host.{vm}")
         meta = inv.meta[vm]
         stack = meta.get("stack")
+        exposed = is_exposed(inv, vm)
         if stack == "appliance":
             comp = meta.get("component")
             if comp and comp in VERSIONS:
@@ -262,13 +312,19 @@ def _host_packages(inv: Inventory, est: Estate) -> None:
             if comp and comp in VERSIONS and comp not in ("exchange-server", "connectwise-screenconnect", "papercut-mf", "windows-netlogon"):
                 _component_package(inv, r, vm, comp)
             continue
-        roll = r.random()
-        n = 0 if roll < 0.2 else (1 if roll < 0.7 else 2)
-        for comp in _weighted_sample(r, HOST_LINUX, n):
+        pool = dict(HOST_LINUX)
+        if exposed and meta.get("env") in ("prod", "staging") and r.random() < TOXIC_HOST_RATE:
+            _component_package(inv, r, vm, "openssl", force_vulnerable=True)  # toxic-combination bias
+            pool.pop("openssl")
+        n = 1 if r.random() < 0.55 else 2
+        for comp in _weighted_sample(r, pool, n):
             _component_package(inv, r, vm, comp)
         comp = meta.get("component")
-        if comp and comp in VERSIONS and comp not in ("citrix-netscaler-gateway", "pan-os-globalprotect", "spring-beans", "jenkins", "confluence-server"):
-            _component_package(inv, r, vm, comp)
+        if comp and comp in VERSIONS and comp not in NAMED_HOST_COMPONENTS and not _has_component(inv, vm, comp):
+            if exposed and comp in TI_TRACKED_COMPONENTS:
+                add_package(inv, vm, comp, VERSIONS[comp][-1][0], ecosystem_of(comp, "os"), [], component=comp)
+            else:
+                _component_package(inv, r, vm, comp)
         if stack == "os" and r.random() < 0.25:
             add_package(inv, vm, *r.choice(FILLER["os"]), "os", [])
 
@@ -280,7 +336,7 @@ def _function_packages(inv: Inventory, est: Estate) -> None:
         eco = STACK_ECOSYSTEM.get(stack, "pypi")
         if r.random() < 0.2:
             continue
-        pool = STACK_COMPONENTS.get(stack, STACK_COMPONENTS["python"])
+        pool = component_pool(STACK_COMPONENTS.get(stack, STACK_COMPONENTS["python"]), is_exposed(inv, fid))
         for comp in _weighted_sample(r, pool, 1):
             _component_package(inv, r, fid, comp)
         if r.random() < 0.5:

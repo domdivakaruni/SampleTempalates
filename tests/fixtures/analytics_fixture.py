@@ -614,7 +614,7 @@ def build_fixture_graph() -> ContextGraph:
     for i, target in enumerate(ids_targets):
         t = f"2026-09-10T{9 + i // 2:02d}:{(i * 11) % 60:02d}:00Z"
         b.alert(f"alert:ids:ids-n1{i + 1:02d}", "Exploit attempt signature: HTTP request smuggling probe", "low" if i % 3 else "medium", t, source_system="ids", alert_type="network", anchor=target, techniques=["T1595.002"], tactic="Reconnaissance", extra={"source_ip": sc.SCANNER_IP, "signature": f"ET SCAN probe {i + 1}"}, involves=[(scanner_ip, "source")])
-    for i, addr in enumerate(NOISE_EXT_IPS):
+    for addr in NOISE_EXT_IPS:
         b.ip(addr, asn="AS64510", asn_org="Fictional cloud hosting", country="US")
     for i in range(5):
         t = f"2026-09-{9 + i % 3:02d}T{10 + i:02d}:05:00Z"

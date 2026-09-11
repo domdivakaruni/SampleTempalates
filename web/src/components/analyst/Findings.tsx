@@ -21,7 +21,7 @@ export function Findings({ findings }: { findings: Finding[] }) {
     if (active) {
       focus(id)
       select(id)
-    } else navigate(`/explorer?seed=${encodeURIComponent(id)}`)
+    } else navigate(`/explorer?id=${encodeURIComponent(id)}`)
   }
   return (
     <div className="space-y-1">

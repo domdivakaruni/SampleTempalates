@@ -193,7 +193,7 @@ def match_iocs(ctx: AnalyticsContext) -> dict[str, int]:
             for ind, mt, conf in entity_hits.get(ent, []):
                 found.setdefault(ind, (mt, conf, ent))
             if g.label_of(ent) == "Process":
-                for nb, d in g.out_edges(ent, ("EXECUTED", "CONNECTED_TO")):
+                for nb, _ in g.out_edges(ent, ("EXECUTED", "CONNECTED_TO")):
                     for ind, mt, conf in entity_hits.get(nb, []):
                         found.setdefault(ind, (mt, conf, nb))
         for ind, (mt, conf, via) in found.items():

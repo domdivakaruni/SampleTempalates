@@ -17,11 +17,12 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, ORJSONResponse
+from fastapi.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 
 from throughline import __version__
 from throughline.api.errors import ApiError, install_error_handlers
+from throughline.api.responses import ORJSONResponse
 from throughline.api.routers import agent, alerts, chat, investigate, meta, threat_intel
 from throughline.api.routers import graph as graph_router
 from throughline.api.runtime import Runtime, load_runtime

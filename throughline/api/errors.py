@@ -15,8 +15,9 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from throughline.api.responses import ORJSONResponse
 
 log = logging.getLogger(__name__)
 

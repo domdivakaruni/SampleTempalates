@@ -20,10 +20,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        manualChunks: {
-          graph: ['cytoscape', 'cytoscape-fcose', 'cytoscape-dagre'],
-          react: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query', 'zustand'],
-          markdown: ['react-markdown'],
+        // Function form: the object form is not accepted by Rollup's typings in Vite 8.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (/[\\/](cytoscape|cytoscape-fcose|cytoscape-dagre|cose-base|layout-base|dagre|@dagrejs)[\\/]/.test(id)) return 'graph'
+          if (/[\\/](react-markdown|remark-|mdast-|micromark|unified|unist-|hast-|vfile|property-information|html-url-attributes|comma-separated-tokens|space-separated-tokens|decode-named-character-reference|character-entities|trim-lines|devlop|bail|is-plain-obj|trough|zwitch|estree-util|style-to-js|style-to-object|inline-style-parser|extend|ccount|escape-string-regexp|markdown-table|longest-streak)/.test(id)) return 'markdown'
+          if (/[\\/](react|react-dom|react-router|react-router-dom|@tanstack|zustand|scheduler|@remix-run|cookie|set-cookie-parser|turbo-stream|use-sync-external-store)[\\/]/.test(id)) return 'react'
+          return undefined
         },
       },
     },

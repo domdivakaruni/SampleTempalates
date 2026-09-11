@@ -281,7 +281,7 @@ def _breaks(ctx: AnalyticsContext, plan: _Plan) -> list[BreakItem]:
             add(vm, f"instance credentials for {ctx.short(role)} are refreshed; in-flight sessions using the old key fail until the SDK retries", _team_of(ctx, vm))
         for app, _ in g.out_edges(role, ("PART_OF",)):
             add(app, f"uses role {ctx.short(role)}; brief credential refresh", _team_of(ctx, app))
-        for user, d in g.in_edges(role, ("MAPS_TO",)):
+        for user, _ in g.in_edges(role, ("MAPS_TO",)):
             add(user, f"SSO mapping to {ctx.short(role)} interrupted while credentials rotate", _team_of(ctx, g.get(user, "team_id")))
     for user in plan.disabled_users:
         add(user, "account disabled; active sessions and SSO mappings stop working", _team_of(ctx, g.get(user, "team_id")) or (g.get(user, "team_id") if g.get(user, "team_id") in g else None))

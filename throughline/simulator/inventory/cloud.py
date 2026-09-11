@@ -553,7 +553,7 @@ def _vm_service(inv: Inventory, est: Estate, app: AppSpec, svc: Svc, acct_key: s
             inv.meta[vm_id]["lb_ports"] = [svc.port] if scheme == "internet-facing" else []
             inv.meta[vm_id]["lb_id"] = lb_id
     # a container image for the service, run by all its VMs (application stacks only)
-    if svc.stack in ("java", "node", "python", "go") and svc.name not in ("log4j-testbed",) and (svc.name == "stmt-render" or r.random() < 0.75):
+    if svc.stack in ("java", "node", "python", "go") and svc.name not in ("log4j-testbed",) and (svc.name == "stmt-render" or svc.expose in ("lb", "direct") or r.random() < 0.75):
         tag = _service_version(app, svc, env)
         image_id = _image(inv, est, "ecr", f"larkspur/{svc.name}", tag, stack=svc.stack, app=app.slug)
         for vm_id in ids:

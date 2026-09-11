@@ -27,7 +27,7 @@ function CodeRef({ children }: { children?: React.ReactNode }) {
     if (active) {
       focus(text)
       select(text)
-    } else navigate(`/explorer?seed=${encodeURIComponent(text)}`)
+    } else navigate(`/explorer?id=${encodeURIComponent(text)}`)
   }
   return (
     <button type="button" onClick={open} className="cursor-pointer rounded border border-transparent hover:border-accent/50" title={`${label ?? 'node'}: ${text}`}>

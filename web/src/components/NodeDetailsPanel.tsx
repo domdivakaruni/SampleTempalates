@@ -74,7 +74,7 @@ export function NodeDetailsPanel({ nodeId, onClose, onExpand, onBlastRadius, cla
               {pinned ? <PinOff size={12} /> : <Pin size={12} />}
             </button>
             {!inExplorer && (
-              <button type="button" className="btn" onClick={() => navigate(`/explorer?seed=${encodeURIComponent(nodeId)}`)}>
+              <button type="button" className="btn" onClick={() => navigate(`/explorer?id=${encodeURIComponent(nodeId)}`)}>
                 <ExternalLink size={12} /> Explorer
               </button>
             )}
