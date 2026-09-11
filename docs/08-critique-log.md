@@ -32,6 +32,8 @@ the data for realism. Each round lists what was found and what changed.
 
 | Check | Result |
 |---|---|
+| Data sweep: 105 noise alerts (WAF, IDS, EDR) carried detection times later than the simulation clock because "today" was spread over 24 hours | The shared alert constructor moves any post-clock time back one day; zero future-dated alerts, events or logons |
+| Data sweep: vendor severities, contextual bands, per-entity alert counts, crown-jewel fan-in, sensor coverage and degree outliers | All within expected ranges (46 vendor-critical alerts: 19 land in noise, 1 in high) |
 | Full Python suite (unit, conformance, API, scenarios) | green |
 | Web lint and production build | clean |
 | Screenshots regenerated from the running prototype | `docs/screenshots/` |

@@ -8,10 +8,11 @@ typed columns docs/03-graph-schema.md section 3.6 requires.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 from throughline.simulator.catalog.techniques import TECHNIQUES, tactic_of, technique_node_id
-from throughline.simulator.common import at, edge, node
+from throughline.simulator.common import NOW, at, edge, node, parse_ts, ts
 from throughline.simulator.common import parse_ts as _parse_ts
 from throughline.simulator.events.inventory_stub import Inventory
 
@@ -129,6 +130,8 @@ def add_alert(
     """
     feed = SOURCE_FEED.get(source_system, f"{source_system}-sim")
     detected = at(detected_at)
+    if parse_ts(detected) > NOW:  # noise generators spread "today" over 24 h; nothing may post-date the simulation clock
+        detected = ts(parse_ts(detected) - timedelta(days=1))
     tac = tactic if tactic is not None else (tactic_of(techniques) or "")
     props = {
         "source_system": source_system,
