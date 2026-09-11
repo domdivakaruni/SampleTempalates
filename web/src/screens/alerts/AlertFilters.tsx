@@ -5,8 +5,7 @@ import { cn } from '../../lib/format'
 import type { ParamPatch } from '../../lib/useSearchParam'
 import { sourceLabel } from '../../theme'
 
-export const ALERT_PARAM_KEYS = ['q', 'band', 'severity', 'source', 'storyline', 'rcj', 'oap', 'sort', 'order', 'offset', 'limit'] as const
-export type AlertParamKey = (typeof ALERT_PARAM_KEYS)[number]
+import type { AlertParamKey } from './params'
 
 const BANDS = ['critical', 'high', 'medium', 'low', 'noise']
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'informational']
@@ -28,7 +27,12 @@ interface Props {
 
 export function AlertFilters({ values, patch, storylines }: Props) {
   const [text, setText] = useState(values.q)
-  useEffect(() => setText(values.q), [values.q])
+  const [seenQ, setSeenQ] = useState(values.q)
+  if (values.q !== seenQ) {
+    // The URL changed underneath us (preset, clear, back button): adopt it without an extra effect pass.
+    setSeenQ(values.q)
+    setText(values.q)
+  }
   useEffect(() => {
     if (text === values.q) return
     const t = setTimeout(() => patch({ q: text, offset: null }), 300)

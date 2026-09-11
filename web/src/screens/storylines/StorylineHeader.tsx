@@ -1,5 +1,6 @@
 import { ArrowLeft, Bot, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useNodesBatch } from '../../api/hooks'
 import type { StorylineOut } from '../../api/types'
 import { bandForScore } from '../../api/types'
 import { LabelIcon } from '../../components/LabelIcon'
@@ -13,6 +14,8 @@ export function StorylineHeader({ story }: { story: StorylineOut }) {
   const navigate = useNavigate()
   const askAbout = useDrawerStore((s) => s.askAbout)
   const setSeed = useCanvasStore((s) => s.setExplorerSeed)
+  const jewels = useNodesBatch(story.crown_jewels_reached)
+  const jewelNode = (id: string) => jewels.data?.nodes.find((n) => n.id === id)
   const openExplorer = () => {
     if (story.fragment) setSeed(story.fragment)
     navigate(story.fragment ? '/explorer' : `/explorer?id=${encodeURIComponent(story.id)}`)
@@ -54,7 +57,7 @@ export function StorylineHeader({ story }: { story: StorylineOut }) {
             <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs">
               <span className="text-sev-critical">Crown jewels reached:</span>
               {story.crown_jewels_reached.map((j) => (
-                <NodeRef key={j} id={j} />
+                <NodeRef key={j} id={j} node={jewelNode(j)} />
               ))}
             </div>
           )}

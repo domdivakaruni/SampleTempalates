@@ -16,6 +16,12 @@ interface Props {
   mono?: boolean
 }
 
+/** `database:aws:111111111111:cardholder-db` -> `cardholder-db`; three-segment ids keep their tail. */
+function fallbackName(id: string): string {
+  const parts = id.split(':')
+  return parts.length > 3 ? parts[parts.length - 1] : shortId(id)
+}
+
 /** Clickable node reference (icon + name). `focus` mode focuses the active canvas; `explorer` opens the node in the explorer. */
 export function NodeRef({ node, id, name, label, className, mode = 'focus', onSelect, mono }: Props) {
   const navigate = useNavigate()
@@ -23,7 +29,7 @@ export function NodeRef({ node, id, name, label, className, mode = 'focus', onSe
   const active = useCanvasStore((s) => s.activeCanvas)
   const nid = node?.id ?? id ?? ''
   const nlabel = node?.label ?? label ?? labelForId(nid) ?? 'Unknown'
-  const nname = node?.name ?? name ?? shortId(nid)
+  const nname = node?.name ?? name ?? fallbackName(nid)
   const click = () => {
     if (mode === 'select' && onSelect) return onSelect(nid)
     if (mode === 'focus' && active) return focus(nid)

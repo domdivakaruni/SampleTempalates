@@ -262,6 +262,24 @@ def storyline_members_on(ctx: AnalyticsContext, node_id: str, storyline_id: str 
     return list(dict.fromkeys(alerts)), list(dict.fromkeys(events))
 
 
+def _step_edge(g: Any, a: str, b: str, etype: str | None) -> dict[str, Any]:
+    """Raw edge data for a path step. Parallel LATERAL_MOVEMENT_TO edges between the same hosts (a routine logon
+    and the anomalous session) are disambiguated by preferring the edge tied to a lateral-movement detection."""
+    cands = [d for d in g.edges_between(a, b) if etype is None or d.get("type") == etype]
+    cands += [d for d in g.edges_between(b, a) if etype is None or d.get("type") == etype]
+    if not cands:
+        return g.first_edge(a, b) or g.first_edge(b, a) or {}
+    if etype == "LATERAL_MOVEMENT_TO" and len(cands) > 1:
+        def rank(d: dict[str, Any]) -> tuple[bool, bool, str]:
+            aid = d.get("alert_id")
+            techs = [str(t) for t in as_list(g.get(aid, "techniques"))] if aid and aid in g else []
+            lateral = any(t.startswith(("T1021", "T1550")) for t in techs)
+            return (not lateral, not bool(aid), str(d.get("time") or ""))
+
+        cands.sort(key=rank)
+    return cands[0]
+
+
 def build_stages(ctx: AnalyticsContext, path: list[str], storyline_id: str | None = None) -> list[StageOut]:
     g = ctx.graph
     D = ctx.digraph("full")
@@ -276,7 +294,7 @@ def build_stages(ctx: AnalyticsContext, path: list[str], storyline_id: str | Non
                 etype = D[prev][nid].get("etype")
             elif D.has_edge(nid, prev):
                 etype = D[nid][prev].get("etype")
-            edata = g.first_edge(prev, nid) or g.first_edge(nid, prev) or {}
+            edata = _step_edge(g, prev, nid, etype)
         alerts, events = storyline_members_on(ctx, nid, storyline_id)
         alerts = [a for a in alerts if a not in seen_alerts]
         seen_alerts.update(alerts)

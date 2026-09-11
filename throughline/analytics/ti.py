@@ -234,8 +234,14 @@ def campaign_techniques(ctx: AnalyticsContext, who: str) -> set[str]:
     return out
 
 
-def attribute_alerts(ctx: AnalyticsContext, min_ttp_ratio: float = 0.5, min_ttp_overlap: int = 3) -> dict[str, int]:
-    """ATTRIBUTED_TO edges from alerts to campaigns and actors (IOC match, or TTP overlap >= 0.5 covering >= 3 techniques)."""
+def attribute_alerts(ctx: AnalyticsContext, min_ttp_ratio: float = 0.75, min_ttp_overlap: int = 4) -> dict[str, int]:
+    """ATTRIBUTED_TO edges from alerts to campaigns and actors.
+
+    Basis ``ioc``: an entity of the alert matched one of the campaign's indicators. Basis ``ttp``: the alert's
+    techniques overlap the campaign's TTPs strongly - every technique for >= 3 techniques, or >= ``min_ttp_ratio``
+    of them for >= ``min_ttp_overlap`` techniques. One or two generic techniques never attribute an alert, and
+    historical campaigns (which inherit their actor's TTPs) are skipped for the technique basis.
+    """
     g = ctx.graph
     campaigns = list(g.nodes_by_label("Campaign"))
     ttps = {c: campaign_techniques(ctx, c) for c in campaigns}
@@ -253,9 +259,12 @@ def attribute_alerts(ctx: AnalyticsContext, min_ttp_ratio: float = 0.5, min_ttp_
         techs = {str(t) for t in as_list(g.get(a, "techniques"))}
         if techs:
             for c in campaigns:
+                if str(g.get(c, "status") or "active") == "historical":
+                    continue
                 overlap = techs & ttps[c]
                 ratio = len(overlap) / len(techs)
-                if len(overlap) >= min_ttp_overlap and ratio >= min_ttp_ratio:
+                strong = (ratio >= 1.0 and len(overlap) >= 3) or (len(overlap) >= min_ttp_overlap and ratio >= min_ttp_ratio)
+                if strong:
                     conf = round(0.3 + 0.4 * ratio, 3)
                     for target in (c, actor_of(ctx, c)):
                         if not target:
@@ -678,15 +687,15 @@ def ti_actors(ctx: AnalyticsContext) -> list[dict[str, Any]]:
     return rows
 
 
-def ti_actor(ctx: AnalyticsContext, actor_id: str) -> dict[str, Any]:
-    return _ti_entity(ctx, actor_id, actor_campaigns(ctx, actor_id))
+def ti_actor(ctx: AnalyticsContext, actor_id: str, summarize: Callable[[str], Any] | None = None) -> dict[str, Any]:
+    return _ti_entity(ctx, actor_id, actor_campaigns(ctx, actor_id), summarize)
 
 
-def ti_campaign(ctx: AnalyticsContext, campaign_id: str) -> dict[str, Any]:
-    return _ti_entity(ctx, campaign_id, [campaign_id])
+def ti_campaign(ctx: AnalyticsContext, campaign_id: str, summarize: Callable[[str], Any] | None = None) -> dict[str, Any]:
+    return _ti_entity(ctx, campaign_id, [campaign_id], summarize)
 
 
-def _ti_entity(ctx: AnalyticsContext, node_id: str, campaigns: list[str]) -> dict[str, Any]:
+def _ti_entity(ctx: AnalyticsContext, node_id: str, campaigns: list[str], summarize: Callable[[str], Any] | None = None) -> dict[str, Any]:
     g = ctx.graph
     if node_id not in g:
         raise KeyError(node_id)
@@ -718,6 +727,7 @@ def _ti_entity(ctx: AnalyticsContext, node_id: str, campaigns: list[str]) -> dic
         "indicators": [g.node_out(i) for i in inds],
         "reports": [g.node_out(r) for r in reports],
         "context": _context_for_ti_node(ctx, node_id),
+        "matched_alerts": [summarize(a) if summarize else g.node_out(a) for a in sorted(alerts, key=lambda x: (-int(g.get(x, "contextual_score") or 0), x))],
         "matched_alert_ids": alerts,
         "affected_asset_ids": sorted(affected),
         "exploited_cve_ids": cves,

@@ -9,7 +9,8 @@ import { ErrorState, SkeletonRows } from '../components/states'
 import { fmtNum } from '../lib/format'
 import { useSearchParamsObject } from '../lib/useSearchParam'
 import { useDrawerStore } from '../store/drawerStore'
-import { ALERT_PARAM_KEYS, AlertFilters } from './alerts/AlertFilters'
+import { AlertFilters } from './alerts/AlertFilters'
+import { ALERT_PARAM_KEYS } from './alerts/params'
 
 const SORTS: Record<string, AlertSort> = { contextual: 'contextual', rank: 'contextual', vendor: 'vendor', time: 'time' }
 const SORT_LABEL: Record<AlertSort, string> = { contextual: 'contextual score', vendor: 'vendor severity', time: 'detection time' }

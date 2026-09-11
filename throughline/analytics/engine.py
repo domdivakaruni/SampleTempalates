@@ -346,10 +346,10 @@ class AnalyticsEngine:
         return ti.ti_actors(self.ctx)
 
     def ti_actor(self, actor_id: str) -> dict[str, Any]:
-        return ti.ti_actor(self.ctx, actor_id)
+        return ti.ti_actor(self.ctx, actor_id, summarize=self.alert_summary)
 
     def ti_campaign(self, campaign_id: str) -> dict[str, Any]:
-        return ti.ti_campaign(self.ctx, campaign_id)
+        return ti.ti_campaign(self.ctx, campaign_id, summarize=self.alert_summary)
 
     def ti_reports(self) -> list[NodeOut]:
         return ti.ti_reports(self.ctx)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { useAlerts, useStoryline } from '../api/hooks'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useAlerts, useNodesBatch, useStoryline } from '../api/hooks'
 import type { ContainmentSimulation, StageOut } from '../api/types'
 import { AlertsTable } from '../components/AlertsTable'
 import { CanvasDetailsOverlay } from '../components/CanvasDetailsOverlay'
@@ -21,6 +21,7 @@ import { StorylineHeader } from './storylines/StorylineHeader'
 /** /storylines/:id — dagre canvas of the stages, timeline, member alerts, crown jewels and the containment simulator. */
 export function StorylineDetail() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const sid = decodeURIComponent(id)
   const q = useStoryline(sid)
   const alertsQ = useAlerts({ storyline: sid, limit: 200, sort: 'time', order: 'asc' })
@@ -32,7 +33,8 @@ export function StorylineDetail() {
   const [selected, setSelected] = useState<string | null>(null)
   const [activeStage, setActiveStage] = useState<number | null>(null)
   useEffect(() => () => select(null), [select])
-  const alerts = alertsQ.data?.items ?? []
+  const alerts = useMemo(() => alertsQ.data?.items ?? [], [alertsQ.data])
+  const jewels = useNodesBatch(q.data?.crown_jewels_reached ?? [])
   const alertsById = useMemo(() => Object.fromEntries(alerts.map((a) => [a.id, a])), [alerts])
   const pick = (nid: string | null) => {
     setSelected(nid)
@@ -83,7 +85,7 @@ export function StorylineDetail() {
             <ul className="space-y-1 text-xs">
               {story.crown_jewels_reached.map((j) => (
                 <li key={j} className="flex items-center justify-between gap-2 rounded border border-sev-critical/30 bg-sev-critical/5 px-2 py-1">
-                  <NodeRef id={j} />
+                  <NodeRef id={j} node={jewels.data?.nodes.find((n) => n.id === j)} />
                   <button type="button" className="btn-ghost py-0" onClick={() => void ops.highlight([j])}>
                     highlight
                   </button>
@@ -97,13 +99,13 @@ export function StorylineDetail() {
                 {story.actor_id && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-fg-2">Actor</span>
-                    <NodeRef id={story.actor_id} name={story.actor_name ?? undefined} label="ThreatActor" mode="explorer" />
+                    <NodeRef id={story.actor_id} name={story.actor_name ?? undefined} label="ThreatActor" mode="select" onSelect={(nid) => navigate(`/threat-intel/actors/${encodeURIComponent(nid)}`)} />
                   </div>
                 )}
                 {story.campaign_id && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-fg-2">Campaign</span>
-                    <NodeRef id={story.campaign_id} name={story.campaign_name ?? undefined} label="Campaign" mode="explorer" />
+                    <NodeRef id={story.campaign_id} name={story.campaign_name ?? undefined} label="Campaign" mode="select" onSelect={(nid) => navigate(`/threat-intel/campaigns/${encodeURIComponent(nid)}`)} />
                   </div>
                 )}
                 <div className="text-[10.5px] text-fg-3">Attribution comes from IOC matches (hashes, C2 domain, egress IP) and TTP overlap with the intel report; open the actor for the full context.</div>

@@ -81,6 +81,8 @@ export const useTiReport = (id: string | undefined) =>
 export const useTiExposure = (sectorOnly: boolean) =>
   useQuery({ queryKey: qk.tiExposure(sectorOnly), queryFn: () => api.tiExposure(sectorOnly), staleTime: 60_000, placeholderData: keepPreviousData })
 
+export const useNodesBatch = (ids: string[]) =>
+  useQuery({ queryKey: ['nodes-batch', [...ids].sort()] as const, queryFn: () => api.nodesBatch(ids), enabled: ids.length > 0, staleTime: 5 * 60_000 })
 export const useCredentialJoins = () => useQuery({ queryKey: qk.credentialJoins, queryFn: api.credentialJoins, staleTime: 60_000 })
 export const useContainment = () => useMutation({ mutationFn: (body: ContainmentIn) => api.containment(body) })
 export const useCreateChatSession = () => useMutation({ mutationFn: (context?: ChatContext) => api.chatCreateSession(context) })

@@ -65,6 +65,10 @@ CAMPAIGN_OLD = "campaign:ti:driftwood-2025"
 IOC_OLD_IP = f"ioc:ipv4:{OLD_IOC_IP}"
 
 FILE_EICAR = "file:sha256:275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+BG_INCIDENT = "incident:falcon:inc-0200"
+WAF_NOISE_ON_EDGE = "alert:waf:waf-g001"
+TOXIC_ISSUE_ON_EDGE = "alert:cspm:iss-g005"
+EXPLAINED_CLOUD_ANOMALY = "alert:cloud-anomaly:ca-g001"
 IP = "ip:v4:{}"
 DOM = "domain:dns:{}"
 
@@ -553,6 +557,10 @@ def build_fixture_graph() -> ContextGraph:
     e("SPAWNED", p_shell, p_curl, source="falcon-sim")
     e("LOGGED_ON", sc.SVC_FINOPS_SFTP, sc.EP_BASTION, {"logon_type": "ssh", "logon_time": a["a007"][1], "source_ip": sc.WKS_DANA_IP, "session_id": "ssh-7f3a"}, source="falcon-sim", first_seen=a["a007"][1], last_seen=a["a007"][1])
     e("LOGGED_ON", sc.SVC_FINOPS_SFTP, sc.EP_BASTION, {"logon_type": "ssh", "logon_time": "2026-09-05T03:00:00Z", "source_ip": sc.WKS_DANA_IP, "session_id": "sftp-routine"}, source="falcon-sim", first_seen="2026-09-05T03:00:00Z", last_seen="2026-09-05T03:00:00Z")
+    # the nightly non-interactive SFTP baseline from Dana's workstation (a routine that must never become lateral movement)
+    for day in range(5, 11):
+        t = f"2026-09-{day:02d}T03:00:00Z"
+        e("LOGGED_ON", sc.SVC_FINOPS_SFTP, sc.EP_BASTION, {"logon_type": "network", "logon_time": t, "source_ip": sc.WKS_DANA_IP, "session_id": f"sftp-nightly-{day}"}, source="falcon-sim", first_seen=t, last_seen=t)
     e("LOGGED_ON", sc.USER_DANA, sc.WKS_DANA, {"logon_type": "interactive", "logon_time": "2026-09-09T08:30:00Z", "source_ip": None, "session_id": "wks-1"}, source="falcon-sim", first_seen="2026-09-09T08:30:00Z", last_seen="2026-09-09T08:30:00Z")
     b.alert(a["a007"][0], "Interactive SSH session from user workstation to bastion outside business hours", a["a007"][2], a["a007"][1], source_system="falcon", alert_type="detection", anchor=sc.EP_BASTION, techniques=["T1021.004", "T1078"], tactic="Lateral Movement", hostname=sc.BASTION_NAME, user="svc-finops-sftp", incident=sc.INCIDENT_BASTION, extra={"source_ip": sc.WKS_DANA_IP}, involves=[(p_shell, "subject"), (dana_ip, "source"), (sc.SVC_FINOPS_SFTP, "subject")])
     b.alert(a["a008x"][0], "Read of /etc/shadow via sudo", a["a008x"][2], a["a008x"][1], source_system="falcon", alert_type="detection", anchor=sc.EP_BASTION, techniques=["T1003.008"], tactic="Credential Access", hostname=sc.BASTION_NAME, user="svc-finops-sftp", incident=sc.INCIDENT_BASTION, involves=[(p_cat, "subject")])
@@ -634,6 +642,18 @@ def build_fixture_graph() -> ContextGraph:
     b.alert("alert:cspm:iss-g002", "Unencrypted EBS volume attached to instance", "low", "2026-09-11T06:10:00Z", source_system="cspm", alert_type="issue", anchor=APP_VMS[2], hostname="wallet-api-03")
     b.alert("alert:cspm:iss-g003", "Security group allows SSH from 0.0.0.0/0", "medium", "2026-09-11T06:15:00Z", source_system="cspm", alert_type="issue", anchor=sc.DEV_LOG4J_VM, hostname=sc.DEV_LOG4J_NAME)
     b.alert("alert:cspm:iss-g004", "Internet-exposed production instance with critical vulnerability and administrative role", "high", "2026-09-11T06:20:00Z", source_system="cspm", alert_type="issue", anchor=CANARY_VM, hostname="payments-api-canary", involves=[("cve:CVE-2022-22965", "object")])
+
+    # ------------------------------------------------------------------ full-dataset regressions in miniature
+    # a background EDR incident grouping unrelated workstation detections (vendor grouping is not correlation evidence)
+    n(BG_INCIDENT, "Incident", "inc-0200", {"vendor_severity": "medium", "status": "new", "start_time": "2026-09-11T00:30:00Z", "end_time": "2026-09-11T12:05:00Z", "alert_count": 3, "hosts": [sc.EP_MREYES_HOSTNAME, "WKS-4410"], "description": "Grouped endpoint detections on shared hosts."}, source="falcon-sim", first_seen="2026-09-11T00:30:00Z", last_seen="2026-09-11T12:05:00Z")
+    for aid in ("alert:falcon:ldt-g001", "alert:falcon:ldt-g002", "alert:falcon:ldt-g004"):
+        e("PART_OF_INCIDENT", aid, BG_INCIDENT, source="falcon-sim")
+    # a generic scanner probe against the (unpatched) statement renderer 20 hours before the exploitation
+    b.alert(WAF_NOISE_ON_EDGE, "Path Traversal Attack (/../)", "medium", "2026-09-10T01:10:00Z", source_system="waf", alert_type="network", anchor=sc.EDGE_VM, techniques=["T1190"], tactic="Initial Access", hostname=sc.EDGE_NAME, extra={"source_ip": NOISE_EXT_IPS[0], "signature": "930100"}, involves=[(IP.format(NOISE_EXT_IPS[0]), "source")])
+    # the CSPM toxic-combination finding on the same host (potential, not observed activity)
+    b.alert(TOXIC_ISSUE_ON_EDGE, "Toxic combination: internet-exposed VM with critical vulnerability and access to sensitive data", "critical", "2026-09-11T06:25:00Z", source_system="cspm", alert_type="issue", anchor=sc.EDGE_VM, hostname=sc.EDGE_NAME, raw={"rule": "wc-id-toxic-exposed-vuln-data", "severity": "Critical", "resource": sc.EDGE_NAME})
+    # a cloud-anomaly alert on the bastion role that the detector itself explains by its baseline
+    b.alert(EXPLAINED_CLOUD_ANOMALY, "Unusual API call volume for role", "informational", "2026-09-10T04:30:00Z", source_system="cloud-anomaly", alert_type="cloud", anchor=sc.BASTION_ROLE, techniques=["T1580"], tactic="Discovery", hostname=None, user="LarkspurBastionSSMRole", raw={"detector": "role-usage-baseline", "principal": sc.BASTION_ROLE, "explained": True, "note": "within known corporate ranges / expected change"})
 
     return ContextGraph.from_records(list(b.nodes.values()), b.edges)
 

@@ -9,10 +9,10 @@ export function KpiTiles({ kpis, coverage }: { kpis: DashboardKpis; coverage: Da
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
       <KpiTile label="Open alerts" value={fmtNum(kpis.open_alerts)} hint="all sources" icon={<Bell size={13} />} onClick={() => navigate('/alerts')} />
-      <KpiTile label="Critical in context" value={fmtNum(kpis.critical_contextual)} tone={kpis.critical_contextual ? 'bad' : 'neutral'} hint="contextual band ≥ 90" icon={<Siren size={13} />} onClick={() => navigate('/alerts?band=critical')} />
+      <KpiTile label="Critical (context)" value={fmtNum(kpis.critical_contextual)} tone={kpis.critical_contextual ? 'bad' : 'neutral'} hint="contextual band ≥ 90" icon={<Siren size={13} />} onClick={() => navigate('/alerts?band=critical')} />
       <KpiTile label="Storylines" value={fmtNum(kpis.storylines)} tone="accent" hint="correlated intrusions" icon={<GitBranch size={13} />} onClick={() => navigate('/storylines')} />
       <KpiTile
-        label="Crown jewels at risk"
+        label="Jewels at risk"
         value={
           <span>
             {fmtNum(kpis.crown_jewels_at_risk)}
@@ -24,7 +24,7 @@ export function KpiTiles({ kpis, coverage }: { kpis: DashboardKpis; coverage: Da
         icon={<Crown size={13} />}
         onClick={() => navigate('/alerts?rcj=1')}
       />
-      <KpiTile label="Exposed & exploited" value={fmtNum(kpis.internet_exposed_exploited)} tone={kpis.internet_exposed_exploited ? 'warn' : 'neutral'} hint="internet-facing hosts with an actively exploited CVE" icon={<Globe size={13} />} onClick={() => navigate('/threat-intel?tab=exposure')} />
+      <KpiTile label="Exposed + exploited" value={fmtNum(kpis.internet_exposed_exploited)} tone={kpis.internet_exposed_exploited ? 'warn' : 'neutral'} hint="internet-facing hosts with an actively exploited CVE" icon={<Globe size={13} />} onClick={() => navigate('/threat-intel?tab=exposure')} />
       <KpiTile
         label="EDR coverage"
         value={`${fmtNum(kpis.endpoint_coverage_pct, kpis.endpoint_coverage_pct % 1 ? 1 : 0)}%`}

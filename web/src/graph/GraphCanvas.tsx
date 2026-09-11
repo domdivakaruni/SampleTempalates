@@ -60,7 +60,9 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
   const [counts, setCounts] = useState({ nodes: 0, edges: 0 })
   const [menu, setMenu] = useState<{ node: NodeOut; x: number; y: number } | null>(null)
   const callbacks = useRef({ onSelectNode, onSelectEdge, onDoubleClickNode, contextActions })
-  callbacks.current = { onSelectNode, onSelectEdge, onDoubleClickNode, contextActions }
+  useEffect(() => {
+    callbacks.current = { onSelectNode, onSelectEdge, onDoubleClickNode, contextActions }
+  })
 
   const refreshCounts = useCallback(() => {
     const cy = cyRef.current
@@ -258,8 +260,6 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     }
   }, [fragment, setFragment, refreshCounts])
 
-  const handle = (): GraphCanvasHandle | null => (ref && typeof ref !== 'function' ? ref.current : null)
-
   return (
     <div className={`relative h-full w-full overflow-hidden bg-bg ${className ?? ''}`}>
       <div ref={containerRef} className="absolute inset-0" />
@@ -283,7 +283,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
             cyRef.current?.nodes().toggleClass('nolabel', !next)
           }}
           onClear={() => cyRef.current?.elements().removeClass('highlight dim show-label cut')}
-          onFit={() => handle()?.fit() ?? cyRef.current?.fit(undefined, 30)}
+          onFit={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 30 }, duration: 250 })}
           onZoom={(f) => {
             const cy = cyRef.current
             if (!cy) return

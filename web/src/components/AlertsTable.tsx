@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import type { AlertSort, AlertSummary } from '../api/types'
+import type { AlertSummary } from '../api/types'
 import { fmtTime, shortId } from '../lib/format'
 import { LabelIcon } from './LabelIcon'
 import { RankDelta, ReasonChips, ScoreChip, SeverityChip, SourceChip, StorylineChip, TIBadge } from './chips'
@@ -20,7 +20,6 @@ interface Props {
   actorNames?: Record<string, string>
 }
 
-export const SORT_KEY_TO_API: Record<string, AlertSort> = { contextual: 'contextual', vendor: 'vendor', time: 'time' }
 
 export function AlertsTable({ alerts, columns, sort, onSortChange, serverSort, onRowClick, selectedId, className, emptyTitle, actorNames }: Props) {
   const navigate = useNavigate()

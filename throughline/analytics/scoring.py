@@ -6,9 +6,12 @@ Six normalized factors, each with evidence ids and a reason string::
     raw     = 100 (0.30 S + 0.70 context)
 
 Rails (weights.yaml): attack-path floor 90 (+2 credential-pivot bonus) for alerts on a storyline whose cloud
-activity *confirmed* reach of a crown jewel; TI booster floor 80 for assets under active / mass exploitation by
-an actor targeting our sector; no-context ceiling 25; benign-context ceilings (change ticket, known scanner, VPN
-egress, blocked pre-execution, test file, exploit attempt against a non-vulnerable target).
+activity *confirmed* reach of a crown jewel; TI booster floor 80 for detections on assets under active / mass
+exploitation by an actor targeting our sector (+2 when the host itself shows that actor's tooling or
+infrastructure; a WAF / IDS probe qualifies only when it comes from the exploiting actor's infrastructure);
+posture ceiling 80 for CSPM issues (potential, not observed activity); no-context ceiling 25; benign-context
+ceilings (change ticket, detector-explained baseline, known scanner, VPN egress, blocked pre-execution, test
+file, exploit attempt against a non-vulnerable target).
 
 The scorer reads everything from the graph (post-enrichment edges and props) so a request-time explanation is
 identical to the build-time score.
@@ -78,6 +81,21 @@ class _StorylineInfo:
     data_reason: str = ""
 
 
+@dataclass
+class _TIResult:
+    """The threat-intel factor plus the structured signals the rails and the reason chips need."""
+
+    value: float
+    factor: RiskFactor
+    actor_ids: list[str] = field(default_factory=list)
+    ioc_actor_ids: list[str] = field(default_factory=list)  # actors behind matched indicators (ioc basis)
+    ttp_actor_ids: list[str] = field(default_factory=list)  # actors attributed by technique overlap only
+    ioc_count: int = 0
+    exploited_sector: bool = False  # an asset vulnerability under active / mass exploitation, sector relevance >= threshold
+    ioc_confirmed: bool = False  # a high-confidence active indicator of a sector-relevant actor matched
+    ioc_matches_exploiter: bool = False  # a matched indicator belongs to an actor exploiting the asset's vulnerability
+
+
 class Scorer:
     """Scores alerts (and assets) over an AnalyticsContext with per-storyline caches."""
 
@@ -101,7 +119,8 @@ class Scorer:
         reach = ctx.reach(anchor, int(w["privilege"]["reach_depth"]), "access") if anchor else None
         p_val, p_factor, crown = self._privilege(anchor, reach, story)
         d_val, d_factor = self._data(anchor, reach, story)
-        t_val, t_factor, actor_ids, ioc_count, exploited_sector = self._threat_intel(alert_id, attrs, asset, story)
+        ti = self._threat_intel(alert_id, attrs, asset, story)
+        t_val, t_factor, actor_ids, ioc_count, exploited_sector = ti.value, ti.factor, ti.actor_ids, ti.ioc_count, ti.exploited_sector
         c_val, c_factor, pivot = self._correlation(alert_id, attrs, anchor, story)
 
         fw = w["factor_weights"]
@@ -116,6 +135,8 @@ class Scorer:
         benign = self.benign_explanations(alert_id, attrs, anchor, asset, ioc_count)
         final = raw
         r = w["rails"]
+        is_issue = str(attrs.get("alert_type") or "detection") == "issue"
+        network_alert = str(attrs.get("source_system") or "") in ("waf", "ids")
         if benign:
             cap = min(b.cap for b in benign)
             for b in benign:
@@ -130,17 +151,28 @@ class Scorer:
                 if pivot:
                     final += float(r["credential_pivot_bonus"])
                     rails.append(f"credential_pivot_bonus:+{r['credential_pivot_bonus']}")
-            elif exploited_sector and str(attrs.get("alert_type") or "detection") != "issue":
-                # activity on an internet-exposed asset under active exploitation by a sector-targeting actor;
-                # posture issues on such hosts are ranked by their real reach (and carry ti_exposure_score)
+            elif exploited_sector and not is_issue and (not network_alert or ti.ioc_matches_exploiter):
+                # observed activity on an internet-exposed asset under active exploitation by a sector-targeting
+                # actor. Posture issues on such hosts are ranked by their real reach (and carry ti_exposure_score);
+                # a network probe qualifies only when it comes from the infrastructure of an actor exploiting the
+                # asset's vulnerability (IOC match), not from any address that happens to be in a feed.
                 final = max(final, float(r["ti_booster_floor"]))
                 rails.append(f"ti_booster_floor:{r['ti_booster_floor']}")
                 floored = True
+                if ti.ioc_confirmed and not network_alert:
+                    # the host itself shows the actor's tooling / infrastructure contact, not just the exposure
+                    final += float(r["ti_ioc_confirmation_bonus"])
+                    rails.append(f"ti_ioc_confirmation_bonus:+{r['ti_ioc_confirmation_bonus']}")
             th = r["no_context_thresholds"]
             if not floored and d_val <= th["data"] and t_val < th["threat_intel"] and p_val < th["privilege"]:
                 if final > r["no_context_ceiling"]:
                     rails.append(f"no_context_ceiling:{r['no_context_ceiling']}")
                 final = min(final, float(r["no_context_ceiling"]))
+            if is_issue and story is None and final > float(r["posture_ceiling"]):
+                # a posture finding describes potential, not observed activity: it never outranks the floor given
+                # to confirmed activity on actively exploited hosts
+                rails.append(f"posture_ceiling:{r['posture_ceiling']}")
+                final = float(r["posture_ceiling"])
         score = int(round(max(0.0, min(100.0, final))))
 
         story_cj = list(story.crown_jewels) if story else []
@@ -148,7 +180,7 @@ class Scorer:
         on_path = bool(story_cj) or (asset is not None and self._on_internet_path(asset)) or (
             anchor is not None and anchor != asset and self._on_internet_path(anchor)
         )
-        reasons = self._reasons(attrs, story, crown, d_factor, t_factor, actor_ids, pivot, exploited_sector, benign, e_val, p_val)
+        reasons = self._reasons(attrs, story, crown, d_factor, ti, pivot, benign, e_val, p_val)
         breakdown = RiskBreakdown(
             subject_id=alert_id,
             vendor_severity=attrs.get("vendor_severity"),
@@ -181,7 +213,8 @@ class Scorer:
         reach = ctx.reach(asset_id, int(w["privilege"]["reach_depth"]), "access")
         p_val, p_factor, _ = self._privilege(asset_id, reach, None)
         d_val, d_factor = self._data(asset_id, reach, None)
-        t_val, t_factor, _, _, _ = self._threat_intel(asset_id, {}, asset_id, None)
+        ti = self._threat_intel(asset_id, {}, asset_id, None)
+        t_val, t_factor = ti.value, ti.factor
         fw = w["factor_weights"]
         context = fw["exposure"] * e_val + fw["privilege"] * p_val + fw["data"] * d_val + fw["threat_intel"] * t_val
         raw = 100.0 * (w["severity_weight"] * worst_sev + w["context_weight"] * context)
@@ -357,69 +390,84 @@ class Scorer:
         desc = ", ".join(f"{cls} ({self.ctx.short(nid)})" for _, nid, cls in top)
         return best[0], [nid for _, nid, _ in top], f"reaches {desc}"
 
-    def _threat_intel(self, alert_id: str, attrs: dict[str, Any], asset: str | None, story: _StorylineInfo | None) -> tuple[float, RiskFactor, list[str], int, bool]:
+    def _threat_intel(self, alert_id: str, attrs: dict[str, Any], asset: str | None, story: _StorylineInfo | None) -> _TIResult:
         g, tw, rails = self.ctx.graph, self.w["threat_intel"], self.w["rails"]
+        min_rel = float(rails["ti_booster_min_relevance"])
         components: list[tuple[float, str, list[str]]] = []
-        actor_ids: list[str] = []
-        evidence: list[str] = []
-        ioc_count = 0
+        res = _TIResult(0.0, self._factor("threat_intel", "Threat-intel relevance", 0.0, "no IOC match, no exploited vulnerability, no actor interest", []))
+
+        def add_actor(a: str | None, bucket: list[str] | None = None) -> None:
+            if not a:
+                return
+            if a not in res.actor_ids:
+                res.actor_ids.append(a)
+            if bucket is not None and a not in bucket:
+                bucket.append(a)
+
         # IOC matches recorded on the alert itself
         for ind, d in g.out_edges(alert_id, ("MATCHES_IOC",)):
-            ioc_count += 1
+            res.ioc_count += 1
             conf = float(d.get("confidence") or g.get(ind, "confidence") or 0.5)
             actor = self._actor_of_indicator(ind)
             rel = float(g.get(actor, "sector_targeting_relevance") or 0.0) if actor else 0.0
             val = conf * (tw["ioc_base"] + (1 - tw["ioc_base"]) * rel)
             name = self.ctx.name(actor) if actor else "unattributed"
             components.append((val, f"matches {name} IOC {g.get(ind, 'value')} (confidence {conf:.2f})", [ind] + ([actor] if actor else [])))
-            if actor and actor not in actor_ids:
-                actor_ids.append(actor)
+            add_actor(actor, res.ioc_actor_ids)
+            if conf >= float(rails["ti_ioc_confirmation_min_confidence"]) and rel >= min_rel and g.get(ind, "active") is not False:
+                res.ioc_confirmed = True
         # attribution edges (ioc or ttp)
         for who, d in g.out_edges(alert_id, ("ATTRIBUTED_TO",)):
-            if g.label_of(who) == "ThreatActor" and who not in actor_ids:
-                actor_ids.append(who)
-            if d.get("basis") == "ttp":
+            if g.label_of(who) != "ThreatActor":
+                continue
+            if str(d.get("basis") or "") == "ttp":
                 rel = float(g.get(who, "sector_targeting_relevance") or 0.0)
                 components.append((tw["ttp_overlap"] * max(rel, 0.25), f"TTP overlap with {self.ctx.name(who)} ({float(d.get('confidence') or 0):.2f})", [who]))
+                add_actor(who, res.ttp_actor_ids)
+            else:
+                add_actor(who, res.ioc_actor_ids)
         # exploitation status on the asset's vulnerabilities
-        exploited_sector = False
         cves: list[str] = []
         if asset:
             cves.extend(c for c, _ in g.out_edges(asset, ("VULNERABLE_TO",)))
         cves.extend(self.ctx.alert_involves(alert_id, {"Vulnerability"}))
+        exploiters: set[str] = set()
         for cve in dict.fromkeys(cves):
             status = str(g.get(cve, "exploitation_status") or "none")
             rel = float(g.get(cve, "sector_targeting_relevance") or 0.0)
             interest = [a for a in as_list(g.get(cve, "actor_interest")) if a in g]
             if status in sem.EXPLOITED_STATUSES:
-                if rel >= rails["ti_booster_min_relevance"]:
-                    exploited_sector = True
+                if rel >= min_rel:
+                    res.exploited_sector = True
+                    exploiters.update(interest)
                     val = tw["exploited_sector"]
                 else:
                     val = tw["exploited_other"]
                 names = ", ".join(self.ctx.name(a) for a in interest[:2]) or "unattributed"
                 components.append((val, f"{g.get(cve, 'cve_id') or cve} under {status.replace('_', ' ')} by {names} (sector relevance {rel:.2f})", [cve] + interest[:2]))
                 for a in interest:
-                    if a not in actor_ids:
-                        actor_ids.append(a)
+                    add_actor(a)
             elif status == "poc_public":
                 components.append((tw["poc_public"], f"{g.get(cve, 'cve_id') or cve} has a public exploit", [cve]))
             elif g.get(cve, "kev"):
                 components.append((tw["kev_only"], f"{g.get(cve, 'cve_id') or cve} is a known exploited vulnerability", [cve]))
+        res.ioc_matches_exploiter = bool(exploiters & set(res.ioc_actor_ids))
         # storyline attribution
         if story is not None and story.actor_id:
-            val = tw["storyline_attribution_sector"] if story.relevance >= rails["ti_booster_min_relevance"] else tw["storyline_attribution_other"]
+            val = tw["storyline_attribution_sector"] if story.relevance >= min_rel else tw["storyline_attribution_other"]
             components.append((val, f"storyline attributed to {self.ctx.name(story.actor_id)} (sector relevance {story.relevance:.2f})", [story.actor_id, story.id]))
-            if story.actor_id not in actor_ids:
-                actor_ids.append(story.actor_id)
+            add_actor(story.actor_id)
         if not components:
-            return 0.0, self._factor("threat_intel", "Threat-intel relevance", 0.0, "no IOC match, no exploited vulnerability, no actor interest", []), [], 0, False
+            return res
         components.sort(key=lambda c: -c[0])
         best = components[0]
+        evidence: list[str] = []
         for c in components[:3]:
             evidence.extend(c[2])
         reason = best[1] if len(components) == 1 else f"{best[1]}; +{len(components) - 1} more signal{'s' if len(components) > 2 else ''}"
-        return min(1.0, best[0]), self._factor("threat_intel", "Threat-intel relevance", min(1.0, best[0]), reason, evidence), actor_ids, ioc_count, exploited_sector
+        res.value = min(1.0, best[0])
+        res.factor = self._factor("threat_intel", "Threat-intel relevance", res.value, reason, evidence)
+        return res
 
     def _actor_of_indicator(self, ind: str) -> str | None:
         g = self.ctx.graph
@@ -582,6 +630,9 @@ class Scorer:
         ticket = attrs.get("change_ticket")
         if ticket:
             out.append(Explanation("change_ticket", f"inside approved change window {ticket}", caps["change_ticket"], [alert_id]))
+        raw = as_dict(attrs.get("raw"))
+        if raw.get("explained") is True or attrs.get("explained") is True:
+            out.append(Explanation("explained_baseline", "the detector itself explains the anomaly by its known baseline", caps["explained_baseline"], [alert_id]))
         involved_ips = self.ctx.alert_involves(alert_id, {"IpAddress"})
         addrs = {str(g.get(ip, "address") or "") for ip in involved_ips}
         src_ip = attrs.get("source_ip")
@@ -600,8 +651,7 @@ class Scorer:
                 out.append(Explanation("vpn_egress", f"login egress {', '.join(vpn_hits)} is the corporate VPN{'; MFA satisfied' if mfa else ''}", caps["vpn_egress"], [alert_id] + ev))
         title = str(attrs.get("title") or "").lower()
         action = str(attrs.get("action_taken") or attrs.get("disposition") or "").lower()
-        raw = as_dict(attrs.get("raw"))
-        raw_action = str(raw.get("action_taken") or raw.get("action") or raw.get("disposition") or "").lower()
+        raw_action = str(raw.get("action_taken") or raw.get("action") or raw.get("disposition") or raw.get("pattern_disposition") or "").lower()
         blocked = bool(attrs.get("blocked") or attrs.get("prevented") or raw.get("blocked") or raw.get("prevented"))
         if blocked or any(w in action or w in raw_action for w in ("quarantin", "blocked", "prevent", "killed")) or "blocked pre-execution" in title or "quarantined" in title:
             out.append(Explanation("blocked_pre_execution", "blocked / quarantined before execution", caps["blocked_pre_execution"], [alert_id]))
@@ -619,13 +669,15 @@ class Scorer:
 
     # ------------------------------------------------------------------ reasons
 
-    def _reasons(self, attrs: dict[str, Any], story: _StorylineInfo | None, crown: list[str], d_factor: RiskFactor, t_factor: RiskFactor,
-                 actor_ids: list[str], pivot: bool, exploited_sector: bool, benign: list[Explanation], e_val: float, p_val: float) -> list[str]:
+    def _reasons(self, attrs: dict[str, Any], story: _StorylineInfo | None, crown: list[str], d_factor: RiskFactor, ti: _TIResult,
+                 pivot: bool, benign: list[Explanation], e_val: float, p_val: float) -> list[str]:
         g = self.ctx.graph
         chips: list[str] = []
         for b in benign:
             if b.kind == "change_ticket":
                 chips.append(f"change ticket {attrs.get('change_ticket')}")
+            elif b.kind == "explained_baseline":
+                chips.append("explained by baseline")
             elif b.kind == "known_scanner":
                 chips.append("internal scanner")
             elif b.kind == "vpn_egress":
@@ -650,15 +702,23 @@ class Scorer:
             chips.append("credential reused in cloud")
         if story is not None:
             chips.append(f"on {story.stage_count}-stage storyline" if story.stage_count else "on storyline")
-        for a in actor_ids[:2]:
+        named = 0
+        for a in ti.actor_ids:
+            if named >= 2:
+                break
             name = self.ctx.name(a)
-            if any(e.startswith("ioc:") for e in t_factor.evidence_ids):
+            if a in ti.ioc_actor_ids:
                 chips.append(f"matches {name} IOC")
             elif story is not None and story.actor_id == a:
                 chips.append(f"attributed to {name}")
-        if exploited_sector:
+            elif a in ti.ttp_actor_ids:
+                chips.append(f"TTP overlap with {name}")
+            else:
+                continue
+            named += 1
+        if ti.exploited_sector:
             chips.append("internet-exposed + mass-exploited CVE" if e_val >= 1.0 else "actively exploited CVE")
-        if not benign and not jewels and d_factor.value == 0 and t_factor.value < 0.1 and p_val < 0.2:
+        if not benign and not jewels and d_factor.value == 0 and ti.value < 0.1 and p_val < 0.2:
             anchor_label = attrs.get("entity_label")
             if anchor_label in ("StorageBucket", "Database") and "public data only" in d_factor.reason:
                 chips.append("public data only")

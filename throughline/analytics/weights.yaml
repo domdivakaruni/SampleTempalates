@@ -70,10 +70,14 @@ rails:
   credential_pivot_bonus: 2
   ti_booster_floor: 80
   ti_booster_min_relevance: 0.7
+  ti_ioc_confirmation_bonus: 2            # booster-floored alert whose entities match the exploiting sector's actor IOCs
+  ti_ioc_confirmation_min_confidence: 0.7
+  posture_ceiling: 80                     # posture findings (alert_type issue) describe potential, not observed activity
   no_context_ceiling: 25
   no_context_thresholds: {data: 0.0, threat_intel: 0.1, privilege: 0.2}
   benign_ceilings:
     change_ticket: 35
+    explained_baseline: 30                # the detector's own baseline explains the anomaly (raw.explained)
     known_scanner: 25
     vpn_egress: 30
     blocked_pre_execution: 20

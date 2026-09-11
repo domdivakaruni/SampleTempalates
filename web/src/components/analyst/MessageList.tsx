@@ -1,6 +1,7 @@
 import { CircleAlert, Sparkles } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useNavigate } from 'react-router-dom'
 import { labelForId } from '../../graph/schema'
 import { useCanvasStore } from '../../store/canvasStore'
@@ -51,7 +52,7 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
       {m.thinking && <div className="rounded-md border border-dashed border-line px-2 py-1 text-[11px] italic text-fg-3">{m.thinking}</div>}
       {(m.content || m.streaming) && (
         <div className={`prose-chat rounded-lg border border-line bg-panel-2/60 px-3 py-2 ${m.streaming && !m.answer ? 'caret' : ''}`}>
-          {m.content ? <Markdown components={{ code: CodeRef }}>{m.content}</Markdown> : <span className="text-fg-3">Thinking…</span>}
+          {m.content ? <Markdown remarkPlugins={[remarkGfm]} components={{ code: CodeRef }}>{m.content}</Markdown> : <span className="text-fg-3">Thinking…</span>}
         </div>
       )}
       {m.error && (

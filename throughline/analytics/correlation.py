@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from throughline.analytics import semantics as sem
-from throughline.analytics.context import NOW, AnalyticsContext, as_list, fmt_time, parse_time
+from throughline.analytics.context import NOW, AnalyticsContext, as_dict, as_list, fmt_time, parse_time
 from throughline.analytics.ti import actor_of, campaign_of, campaign_techniques, relevance_of
 from throughline.graph.context_graph import ContextGraph
 from throughline.models import GraphFragment, StageOut, StorylineOut
@@ -229,21 +229,135 @@ def _ioc_campaigns(ctx: AnalyticsContext, node: str) -> list[str]:
     return out
 
 
+def _is_network(g: ContextGraph, m: str) -> bool:
+    return g.label_of(m) == "Alert" and str(g.get(m, "source_system") or "") in NETWORK_SOURCES
+
+
+def _member_source(g: ContextGraph, m: str) -> str:
+    if g.label_of(m) == "CloudEvent":
+        return "cloudtrail"
+    return str(g.get(m, "source_system") or "unknown")
+
+
+def _ip_is_pivot(ctx: AnalyticsContext, ip: str) -> bool:
+    """An external ip links members only when it carries threat intelligence (an active indicator with confidence
+    >= MIN_IP_PIVOT_CONFIDENCE) or a bad reputation; arbitrary shared internet addresses (scanners, CDNs) do not."""
+    g = ctx.graph
+    a = g.node(ip) or {}
+    if a.get("is_private") or ctx.is_hub(ip):
+        return False
+    if str(a.get("reputation") or "").lower() in ("suspicious", "malicious"):
+        return True
+    for ind, d in g.out_edges(ip, ("MATCHES_IOC",)):
+        conf = float(d.get("confidence") or g.get(ind, "confidence") or 0)
+        if conf >= MIN_IP_PIVOT_CONFIDENCE and g.get(ind, "active") is not False:
+            return True
+    return False
+
+
+def _alert_ips(ctx: AnalyticsContext, m: str) -> set[str]:
+    """Addresses an alert involves (INVOLVES ip nodes, source_ip, the vendor's remote address fields)."""
+    g = ctx.graph
+    ips = {str(g.get(ip, "address") or "") for ip in ctx.alert_involves(m, {"IpAddress"})}
+    raw = as_dict(g.get(m, "raw"))
+    for key in ("source_ip", "remote_address", "src_ip"):
+        for val in (g.get(m, key), raw.get(key)):
+            if val:
+                ips.add(str(val))
+    ips.discard("")
+    return ips
+
+
+def _network_corroborated(ctx: AnalyticsContext, n: str, c: str) -> bool:
+    """A WAF / IDS alert is tied to a host detection when its source is known campaign infrastructure (an active
+    indicator with confidence >= MIN_IOC_PIVOT_CONFIDENCE) or the host's own telemetry involved the same address."""
+    g = ctx.graph
+    for ind, d in g.out_edges(n, ("MATCHES_IOC",)):
+        conf = float(d.get("confidence") or g.get(ind, "confidence") or 0)
+        if conf >= MIN_IOC_PIVOT_CONFIDENCE and g.get(ind, "active") is not False:
+            return True
+    return bool(_alert_ips(ctx, n) & _alert_ips(ctx, c))
+
+
+def _union_group(uf: _UnionFind, ctx: AnalyticsContext, kind: str, ms: list[str], times: dict[str, datetime | None]) -> None:
+    """Union the members of one pivot group under the kind's time window.
+
+    Detections chain with their nearest neighbour in time. A WAF / IDS alert joins a host detection only when the
+    two are within WINDOW_NETWORK_H and the probe is corroborated (see :func:`_network_corroborated`); through a
+    threat-intel pivot (shared campaign infrastructure) the full window applies. Network alerts never chain with
+    each other except through such a pivot.
+    """
+    g = ctx.graph
+    ordered = sorted((m for m in ms if times[m] is not None), key=lambda m: times[m])  # type: ignore[arg-type,return-value]
+    if kind == "lm":
+        for x in ordered[1:]:
+            uf.union(ordered[0], x)
+        return
+    # identities (roles, credential lineages, the cloud events an alert cites) correlate over 7 days; hosts and
+    # shared infrastructure over 24 h (docs/02 section 4(e))
+    window = timedelta(hours=WINDOW_IDENTITY_H if kind in ("cred", "identity", "event") else WINDOW_HOST_H)
+    core = [m for m in ordered if not _is_network(g, m)]
+    net = [m for m in ordered if _is_network(g, m)]
+    for x, y in zip(core, core[1:], strict=False):
+        if times[y] - times[x] <= window:  # type: ignore[operator]
+            uf.union(x, y)
+    join = timedelta(hours=WINDOW_NETWORK_H) if kind == "host" else window
+    for n in net:
+        for c in core:
+            if abs(times[c] - times[n]) <= join and (kind != "host" or _network_corroborated(ctx, n, c)):  # type: ignore[operator]
+                uf.union(n, c)
+    if kind in ("ip", "campaign"):
+        for x, y in zip(net, net[1:], strict=False):
+            if times[y] - times[x] <= window:  # type: ignore[operator]
+                uf.union(x, y)
+
+
+def _accept_cluster(ctx: AnalyticsContext, ms: list[str], kinds_of: dict[str, set[str]]) -> tuple[bool, list[str]]:
+    """Decide whether a cluster is a storyline; returns (accepted, corroborating signals)."""
+    g = ctx.graph
+    signals: list[str] = []
+    if _has_crown_jewel_credential_chain(ctx, ms):
+        signals.append("credential_chain")
+    if not signals:
+        if len(ms) < 3:
+            return False, signals
+        if not any(not _is_network(g, m) for m in ms):
+            return False, signals  # probes alone: aggregating scanner traffic is the WAF's job
+        techs = [t for m in ms for t in _member_techniques(ctx, m)]
+        stages = sem.stages_covered(techs) | {s for s in (_member_stage(ctx, m) for m in ms) if s}
+        if len(stages) < 2:
+            return False, signals
+    if len({_member_source(g, m) for m in ms}) >= 2:
+        signals.append("cross_source")
+    for kind, name in (("campaign", "ioc_campaign"), ("lm", "lateral_movement"), ("cred", "credential")):
+        if any(kind in kinds_of.get(m, ()) for m in ms):
+            signals.append(name)
+    anchors = {ctx.anchor_of(m) for m in ms if g.label_of(m) == "Alert"}
+    if any(ctx.reaches_crown_jewel(a, 4, "access") for a in anchors if a):
+        signals.append("crown_jewel_reach")
+    return bool(signals), list(dict.fromkeys(signals))
+
+
 def build_storylines(ctx: AnalyticsContext, is_benign: Callable[[str], bool]) -> list[str]:
+    """Correlate alerts and cloud events into ``Storyline`` nodes (see the module docstring for the rules)."""
     g = ctx.graph
     ctx.invalidate()
     ctx._ensure()
     stolen = stolen_credentials(ctx)
-    members: list[str] = [a for a in ctx.alerts if not is_benign(a)]
+    members: list[str] = [a for a in ctx.alerts if str(g.get(a, "alert_type") or "") != "issue" and not is_benign(a)]
     for ev in ctx.cloud_events:
         creds = [c for c, _ in g.out_edges(ev, ("USED_CREDENTIAL",))]
         if g.get(ev, "anomalous") or any(c in stolen for c in creds) or g.out_edges(ev, ("MATCHES_IOC",)):
             members.append(ev)
     times = {m: ctx.member_time(m) for m in members}
+    member_set = set(members)
     pivots: dict[tuple[str, str], list[str]] = defaultdict(list)  # (kind, key) -> members
+    kinds_of: dict[str, set[str]] = defaultdict(set)
 
     def pivot(kind: str, key: str, m: str) -> None:
-        pivots[(kind, key)].append(m)
+        if m in member_set:
+            pivots[(kind, key)].append(m)
+            kinds_of[m].add(kind)
 
     for m in members:
         label = g.label_of(m)
@@ -258,27 +372,25 @@ def build_storylines(ctx: AnalyticsContext, is_benign: Callable[[str], bool]) ->
             for c in ctx.alert_involves(m, {"Credential"}):
                 pivot("cred", root_credential(ctx, c), m)
             for ip in ctx.alert_involves(m, {"IpAddress"}):
-                if not ctx.is_hub(ip):
+                if _ip_is_pivot(ctx, ip):
                     pivot("ip", ip, m)
             for c in _ioc_campaigns(ctx, m):
                 pivot("campaign", c, m)
-            for inc, _ in g.out_edges(m, ("PART_OF_INCIDENT",)):
-                pivot("incident", inc, m)
             for ev in ctx.alert_involves(m, {"CloudEvent"}):
                 pivot("event", ev, m)
-                pivot("event", ev, ev) if ev in times else None
+                pivot("event", ev, ev)
         else:
             for c, _ in g.out_edges(m, ("USED_CREDENTIAL",)):
                 pivot("cred", root_credential(ctx, c), m)
             for ip, _ in g.out_edges(m, ("FROM_IP",)):
-                if not ctx.is_hub(ip):
+                if _ip_is_pivot(ctx, ip):
                     pivot("ip", ip, m)
             for c in _ioc_campaigns(ctx, m):
                 pivot("campaign", c, m)
             for role, _ in g.out_edges(m, ("PERFORMED_BY", "ASSUMED")):
                 if not ctx.is_hub(role):
                     pivot("identity", role, m)
-    # lateral-movement pivots
+    # lateral-movement pivots: detections on the source host before the move, on the target host after it
     for a, b, d in [(u, v, dd) for u, v, dd in g.G.edges(data=True) if dd.get("type") == "LATERAL_MOVEMENT_TO"]:
         when = parse_time(d.get("time"))
         if when is None:
@@ -286,44 +398,34 @@ def build_storylines(ctx: AnalyticsContext, is_benign: Callable[[str], bool]) ->
         key = f"{a}|{b}|{fmt_time(when)}"
         for m in ctx.alerts_on(a):
             t = times.get(m)
-            if t is not None and when - timedelta(hours=LM_LOOKBACK_HOURS) <= t <= when + timedelta(minutes=5) and m in times:
+            if t is not None and when - timedelta(hours=LM_LOOKBACK_HOURS) <= t <= when + timedelta(minutes=5):
                 pivot("lm", key, m)
         for m in ctx.alerts_on(b):
             t = times.get(m)
-            if t is not None and when - timedelta(minutes=5) <= t <= when + timedelta(hours=WINDOW_HOST_H) and m in times:
+            if t is not None and when - timedelta(minutes=5) <= t <= when + timedelta(hours=WINDOW_HOST_H):
                 pivot("lm", key, m)
     uf = _UnionFind()
     for m in members:
         uf.add(m)
     for (kind, _key), ms in pivots.items():
-        ms = list(dict.fromkeys(m for m in ms if m in times))
+        ms = list(dict.fromkeys(ms))
         if len(ms) < 2 or len(ms) > HUB_MEMBER_LIMIT:
             continue
-        window = timedelta(hours=WINDOW_IDENTITY_H if kind in ("cred", "identity", "campaign", "incident", "event") else WINDOW_HOST_H)
-        if kind == "lm":
-            for x in ms[1:]:
-                uf.union(ms[0], x)
-            continue
-        ordered = sorted((m for m in ms if times[m] is not None), key=lambda m: times[m])  # type: ignore[arg-type]
-        for x, y in zip(ordered, ordered[1:], strict=False):
-            if times[y] - times[x] <= window:  # type: ignore[operator]
-                uf.union(x, y)
+        _union_group(uf, ctx, kind, ms, times)
     clusters: dict[str, list[str]] = defaultdict(list)
     for m in members:
         clusters[uf.find(m)].append(m)
-    accepted: list[list[str]] = []
+    accepted: list[tuple[list[str], list[str]]] = []
     for ms in clusters.values():
-        alerts = [m for m in ms if g.label_of(m) == "Alert"]
-        has_edr = any(str(g.get(a, "source_system") or "") == "falcon" for a in alerts)
-        cred_chain = _has_crown_jewel_credential_chain(ctx, ms)
-        if (len(ms) >= 3 and has_edr) or cred_chain:
-            accepted.append(sorted(ms, key=lambda m: (times[m] or NOW, m)))
-    accepted.sort(key=lambda ms: (times[ms[0]] or NOW, ms[0]))
+        ok, signals = _accept_cluster(ctx, ms, kinds_of)
+        if ok:
+            ordered = sorted(ms, key=lambda m: (times[m] or NOW, m))[:MAX_STORYLINE_MEMBERS]
+            accepted.append((ordered, signals))
+    accepted.sort(key=lambda item: (times[item[0][0]] or NOW, item[0][0]))
     used_slugs: dict[str, int] = defaultdict(int)
     created: list[str] = []
-    for ms in accepted:
-        sid = _materialize_storyline(ctx, ms, times, used_slugs)
-        created.append(sid)
+    for ms, signals in accepted:
+        created.append(_materialize_storyline(ctx, ms, times, used_slugs, signals))
     ctx.invalidate()
     return created
 
@@ -354,21 +456,61 @@ def _member_techniques(ctx: AnalyticsContext, m: str) -> list[str]:
     return sem.event_techniques(g.node(m))
 
 
-def _materialize_storyline(ctx: AnalyticsContext, members: list[str], times: dict[str, datetime | None], used_slugs: dict[str, int]) -> str:
+def _attribute(ctx: AnalyticsContext, members: list[str]) -> tuple[str | None, str | None, float, float]:
+    """Campaign attribution of a cluster: (campaign, basis, confidence, ttp_overlap).
+
+    Votes come from high-confidence attribution edges and indicator matches (>= MIN_VOTE_CONFIDENCE, active
+    indicators, non-historical campaigns). Without votes, a campaign whose TTPs cover >= MIN_TTP_RATIO of the
+    storyline's techniques (at least MIN_TTP_TECHNIQUES of them) is attributed on a ``ttp`` basis.
+    """
+    g = ctx.graph
+    votes: dict[str, float] = defaultdict(float)
+    basis_of: dict[str, str] = {}
+
+    def live(c: str) -> bool:
+        return str(g.get(c, "status") or "active") != "historical"
+
+    for m in members:
+        for who, d in g.out_edges(m, ("ATTRIBUTED_TO",)):
+            conf = float(d.get("confidence") or 0.0)
+            if g.label_of(who) == "Campaign" and conf >= MIN_VOTE_CONFIDENCE and live(who):
+                votes[who] += conf
+                basis_of.setdefault(who, str(d.get("basis") or "ioc"))
+        for ind, d in g.out_edges(m, ("MATCHES_IOC",)):
+            conf = float(d.get("confidence") or g.get(ind, "confidence") or 0.0)
+            c = campaign_of(ctx, ind)
+            if c and conf >= MIN_VOTE_CONFIDENCE and g.get(ind, "active") is not False and live(c):
+                votes[c] += conf * 0.5
+                basis_of.setdefault(c, "ioc")
+    member_techs = {t for m in members for t in _member_techniques(ctx, m)}
+    if votes:
+        campaign = max(votes.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        ttps = campaign_techniques(ctx, campaign)
+        overlap = len(member_techs & ttps) / len(member_techs) if member_techs else 0.0
+        return campaign, basis_of.get(campaign, "ioc"), round(min(0.95, votes[campaign]), 3), round(overlap, 3)
+    if len(member_techs) >= MIN_TTP_TECHNIQUES:
+        best: tuple[float, float, str] | None = None
+        for c in g.nodes_by_label("Campaign"):
+            if not live(c):
+                continue
+            ttps = campaign_techniques(ctx, c)
+            shared = member_techs & ttps
+            overlap = len(shared) / len(member_techs)
+            if len(shared) >= MIN_TTP_TECHNIQUES and overlap >= MIN_TTP_RATIO:
+                cand = (overlap, relevance_of(ctx, c), c)
+                if best is None or cand > best:
+                    best = cand
+        if best is not None:
+            return best[2], "ttp", round(0.3 + 0.4 * best[0], 3), round(best[0], 3)
+    return None, None, 0.0, 0.0
+
+
+def _materialize_storyline(ctx: AnalyticsContext, members: list[str], times: dict[str, datetime | None], used_slugs: dict[str, int],
+                           signals: list[str] | None = None) -> str:
     g = ctx.graph
     alerts = [m for m in members if g.label_of(m) == "Alert"]
     events = [m for m in members if g.label_of(m) == "CloudEvent"]
-    # attribution by votes
-    votes: dict[str, float] = defaultdict(float)
-    for m in members:
-        for who, d in g.out_edges(m, ("ATTRIBUTED_TO",)):
-            if g.label_of(who) == "Campaign":
-                votes[who] += float(d.get("confidence") or 0.5)
-        for ind, d in g.out_edges(m, ("MATCHES_IOC",)):
-            c = campaign_of(ctx, ind)
-            if c:
-                votes[c] += float(d.get("confidence") or 0.5) * 0.5
-    campaign = max(votes.items(), key=lambda kv: (kv[1], kv[0]))[0] if votes else None
+    campaign, att_basis, att_conf, ttp_overlap = _attribute(ctx, members)
     actor = actor_of(ctx, campaign) if campaign else None
     # anchors, credentials, hosts
     anchors: list[str] = []
@@ -469,6 +611,8 @@ def _materialize_storyline(ctx: AnalyticsContext, members: list[str], times: dic
             "event_ids": events, "member_count": len(members), "crown_jewels_reached": sorted(reached), "confirmed_targets": sorted(confirmed),
             "confirmed_reach": bool(confirmed), "first_event": fmt_time(first_t), "last_event": fmt_time(last_t), "contextual_score": 0,
             "stages": stages_json, "anchor_ids": anchors, "credential_ids": creds, "host_ids": list(dict.fromkeys(hosts)), "ip_ids": ips,
+            "attribution_basis": att_basis, "attribution_confidence": att_conf, "ttp_overlap": ttp_overlap,
+            "correlation_signals": list(signals or []),
         },
     })
     for m in members:
@@ -483,10 +627,10 @@ def _materialize_storyline(ctx: AnalyticsContext, members: list[str], times: dic
     for x, y in zip(members, members[1:], strict=False):
         g.add_edge_record({"type": "NEXT_STAGE", "src": x, "dst": y, "source": DERIVED, "first_seen": fmt_time(times[x]), "last_seen": fmt_time(times[y]),
                            "confidence": 0.9, "props": {"storyline_id": sid, "stage": _member_stage(ctx, y)}})
-    for who, basis in ((campaign, "ioc"), (actor, "derived")):
+    for who, basis in ((campaign, att_basis or "ioc"), (actor, "derived")):
         if who:
             g.add_edge_record({"type": "ATTRIBUTED_TO", "src": sid, "dst": who, "source": DERIVED, "first_seen": fmt_time(first_t), "last_seen": fmt_time(last_t),
-                               "confidence": round(min(0.95, max(votes.values(), default=0.5)), 3), "props": {"basis": basis, "confidence": round(min(0.95, max(votes.values(), default=0.5)), 3)}})
+                               "confidence": att_conf, "props": {"basis": basis, "confidence": att_conf}})
     return sid
 
 

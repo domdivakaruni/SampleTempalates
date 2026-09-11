@@ -12,11 +12,14 @@ interface Props { story: StorylineOut; compact?: boolean; className?: string; ac
 /** Storyline summary card: score, actor/campaign, stages, member alerts, crown jewels, time span. */
 export function StorylineCard({ story, compact, className, active }: Props) {
   const navigate = useNavigate()
+  const open = () => navigate(`/storylines/${encodeURIComponent(story.id)}`)
   return (
-    <button
-      type="button"
-      onClick={() => navigate(`/storylines/${encodeURIComponent(story.id)}`)}
-      className={cn('panel block w-full text-left transition-colors hover:border-line-2 hover:bg-panel-2', active && 'border-accent/60', className)}
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open()}
+      className={cn('panel block w-full cursor-pointer text-left transition-colors hover:border-line-2 hover:bg-panel-2 focus:outline-none focus:border-accent/60', active && 'border-accent/60', className)}
     >
       <div className="flex items-start gap-3 p-3">
         <ScoreChip score={story.contextual_score} band={bandForScore(story.contextual_score)} size="lg" />
@@ -34,7 +37,7 @@ export function StorylineCard({ story, compact, className, active }: Props) {
             {story.campaign_name && <span className="chip border-line-2 text-fg-2">{story.campaign_name}</span>}
             <span className="flex items-center gap-1" title="Kill-chain stages"><Layers size={11} /> {story.stage_count} stages</span>
             <span className="flex items-center gap-1" title="Member alerts"><Bell size={11} /> {story.alert_ids.length} alerts</span>
-            <span className={cn('flex items-center gap-1', story.crown_jewels_reached.length && 'text-sev-critical')} title={story.crown_jewels_reached.map(shortId).join('\n')}>
+            <span className={cn('flex items-center gap-1', story.crown_jewels_reached.length > 0 && 'text-sev-critical')} title={story.crown_jewels_reached.map(shortId).join('\n')}>
               <Crown size={11} /> {story.crown_jewels_reached.length} crown jewel{story.crown_jewels_reached.length === 1 ? '' : 's'}
             </span>
             <span className="flex items-center gap-1 mono" title="First to last event (UTC)"><Clock size={11} /> {fmtShortTime(story.first_event)} → {fmtShortTime(story.last_event)}</span>
@@ -43,6 +46,6 @@ export function StorylineCard({ story, compact, className, active }: Props) {
           {!compact && story.stages.length > 0 && <StageStrip stages={story.stages} compact className="mt-2" />}
         </div>
       </div>
-    </button>
+    </div>
   )
 }

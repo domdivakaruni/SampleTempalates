@@ -161,7 +161,7 @@ export function actorDetail(id: string): ActorDetailOut | undefined {
   campaigns.forEach((c) => affectedAssets(g, c.id, []).forEach((a) => assetIds.add(a)))
   const fragIds = new Set<string>([id, actor.id, ...campaigns.map((c) => c.id), ...alerts.map((a) => a.id), ...assetIds, ...context.matches.map((m) => m.matched_node_id), ...indicators.filter((i) => context.matches.some((m) => m.indicator_id === i.id)).map((i) => i.id), ...exploitedCvesPresent(g, id).map((c) => c.id), ...campaigns.flatMap((c) => exploitedCvesPresent(g, c.id).map((x) => x.id))])
   const affected: GraphFragment = g.fragment(fragIds, { focus: [id], hint: 'neighborhood', highlight: new Set([...assetIds, ...alerts.map((a) => a.id)]) })
-  return { actor: isActor ? owner : actor, campaigns, malware, techniques, indicators, reports, context, affected }
+  return { actor: isActor ? owner : actor, campaign: isActor ? null : owner, campaigns, malware, techniques, indicators, reports, context, affected, matched_alert_ids: alerts.map((a) => a.id), affected_asset_ids: [...assetIds], exploited_cve_ids: [...new Set([...exploitedCvesPresent(g, id).map((c) => c.id), ...campaigns.flatMap((c) => exploitedCvesPresent(g, c.id).map((x) => x.id))])] }
 }
 
 export function reportList(): NodeOut[] {
