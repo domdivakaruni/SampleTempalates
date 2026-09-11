@@ -115,7 +115,11 @@ def _path_out(ctx: AnalyticsContext, path: list[str], label: str | None = None, 
         if d is not None:
             eids.append(edge_id(b, d["type"], a))
             continue
-        eids.append(edge_id(a, "UNLOCKS", b))  # implicit credential move (contains_credentials_for)
+        attrs = g.node(a) or {}
+        implicit = list(attrs.get("contains_credentials_for") or []) + list(attrs.get("grants_access_to") or [])
+        if b in implicit:
+            eids.append(edge_id(a, "UNLOCKS", b))  # implicit credential move (contains_credentials_for / grants_access_to)
+        # any other gap is a multi-edge hop (e.g. alert -> process -> file); it carries no single edge id
     return PathOut(node_ids=list(path), edge_ids=eids, hops=max(len(path) - 1, 0), label=label, likelihood=likelihood, stages=stages or [])
 
 

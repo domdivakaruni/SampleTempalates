@@ -170,7 +170,11 @@ class InsightBuilder:
                     if any(i == ind for i, _ in g.out_edges(e, ("MATCHES_IOC",))):
                         entity = e
                         break
-            chain: list[str] = [alert_id] + ([entity] if entity else []) + [ind]
+            bridge: str | None = None
+            if entity is not None and g.first_edge(alert_id, entity) is None:
+                # the match sits one hop behind an involved process (a file it wrote, a host it contacted)
+                bridge = next((e for e, _ in g.out_edges(alert_id, ("INVOLVES",)) if g.first_edge(e, entity) is not None), None)
+            chain: list[str] = [alert_id] + ([bridge] if bridge else []) + ([entity] if entity else []) + [ind]
             malware = next((t for t, _ in g.out_edges(ind, ("INDICATES",)) if g.label_of(t) == "Malware"), None)
             campaign = g.get(ind, "campaign_id") if g.get(ind, "campaign_id") in g else next((t for t, _ in g.out_edges(ind, ("INDICATES",)) if g.label_of(t) == "Campaign"), None)
             actor = g.get(ind, "actor_id") if g.get(ind, "actor_id") in g else None

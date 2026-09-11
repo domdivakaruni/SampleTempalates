@@ -143,7 +143,8 @@ def test_vulnerability_overlay_and_exposure_scores(graph: ContextGraph) -> None:
     assert C.ACTOR_HT in graph.get(C.LOG4SHELL, "actor_interest")
     assert graph.get(C.LOG4SHELL, "sector_targeting_relevance") == pytest.approx(0.8)
     assert C.REPORT_SALTWORKS in graph.get(C.LOG4SHELL, "ti_report_ids")
-    assert graph.get(C.EDGE_VM, "ti_exposure_score") > graph.get(C.STG_EDGE_VM, "ti_exposure_score") >= 0
+    # exploitation x actor interest x sector relevance x CVSS: the same mass-exploited CVE scores the same on every exposed host
+    assert graph.get(C.EDGE_VM, "ti_exposure_score") == graph.get(C.STG_EDGE_VM, "ti_exposure_score") > graph.get(fx.CANARY_VM, "ti_exposure_score") > 0
     assert graph.get(C.BASTION_VM, "ti_exposure_score") == 0.0  # not internet-exposed
     assert graph.get(C.BASTION_VM, "crown_jewel_reach") == 3
     assert graph.get(C.DEV_SANDBOX_VM, "crown_jewel_reach") == 0
@@ -152,7 +153,8 @@ def test_vulnerability_overlay_and_exposure_scores(graph: ContextGraph) -> None:
 def test_ioc_matching_and_attribution_edges(graph: ContextGraph) -> None:
     matched = {ind for ind, _ in graph.out_edges(A["a003"], ("MATCHES_IOC",))}
     assert {C.IOC_C2_DOMAIN, C.IOC_C2_IP, C.IOC_HASH_NIGHTFERRY} <= matched
-    assert {ind for ind, _ in graph.out_edges(A["a001"], ("MATCHES_IOC",))} == {C.IOC_HASH_MAPLELOADER}
+    # a001 matches the loader hash directly and, one hop behind rundll32 (which wrote synchost.exe), the NIGHTFERRY indicators
+    assert {ind for ind, _ in graph.out_edges(A["a001"], ("MATCHES_IOC",))} >= {C.IOC_HASH_MAPLELOADER, C.IOC_HASH_NIGHTFERRY}
     assert {ind for ind, _ in graph.out_edges(A["a017"], ("MATCHES_IOC",))} == {C.IOC_EGRESS_IP}
     assert graph.get(A["a003"], "ioc_match_count") == len(matched)
     attributed = {who for who, _ in graph.out_edges(A["a001"], ("ATTRIBUTED_TO",))}
@@ -334,7 +336,8 @@ def test_storylines_exact(engine: AnalyticsEngine, graph: ContextGraph) -> None:
     assert a.first_event == C.ALERT_A["a001"][1] and a.last_event == C.ALERT_A["a017"][1]
     stage_techs = {t for s in a.stages for t in s.technique_ids}
     assert {"T1566.001", "T1552.005", "T1021.004", "T1548.005", "T1530"} <= stage_techs
-    assert graph.get(C.STORYLINE_A, "confirmed_reach") is True and graph.get(C.STORYLINE_A, "attribution_basis") == "ioc"
+    assert graph.get(C.STORYLINE_A, "confirmed_reach") is True and str(graph.get(C.STORYLINE_A, "attribution_basis")).startswith("ioc")
+    assert graph.get(C.STORYLINE_A, "attribution_confidence") >= 0.7 and "credential" in graph.get(C.STORYLINE_A, "correlation_signals")
     b = engine.storyline(C.STORYLINE_B, with_fragment=False)
     assert set(b.alert_ids) == STORYLINE_B_ALERTS
     assert b.actor_id == C.ACTOR_HT and b.campaign_id == C.CAMPAIGN_SALTWORKS and b.stage_count == 3
@@ -425,7 +428,8 @@ def test_attack_path_from_phishing_to_vault(engine: AnalyticsEngine, graph: Cont
         _check_edge_ids(graph, s.edge_ids, "stage edges")
     internet = engine.attack_paths(through_id=C.EDGE_VM, target_id=C.CARDHOLDER_DB, k=2)
     assert internet and internet[0].entry_id == sem.INTERNET_ID and internet[0].stages[0].stage == "Initial Access"
-    assert "T1190" in internet[0].stages[0].technique_ids
+    assert internet[0].stages[1].node_ids == [C.EDGE_VM] and "T1190" in internet[0].stages[1].technique_ids  # exploitable exposure
+    assert internet[0].stages[-1].node_ids == [C.CARDHOLDER_DB]
 
 
 # ----------------------------------------------------------------------------- threat intel
