@@ -81,10 +81,12 @@ function Body({ data, kind, subjectId }: { data: ActorDetailOut; kind: 'actor' |
       </div>
       <div className="grid gap-3 p-4 xl:grid-cols-[minmax(0,1fr)_440px]">
         <div className="min-w-0 space-y-3">
-          <Panel title={`Affected assets in our estate (${data.affected.nodes.length} nodes)`} flush bodyClassName="relative h-[360px]">
+          <Panel title={`Affected assets in our estate (${data.affected.nodes.length} nodes)`} flush>
+            <div className="relative h-[360px]">
             <GraphCanvas ref={ref} fragment={data.affected} contextActions={contextActions} onSelectNode={(n) => select(n?.id ?? null)} emptyHint="Nothing in the estate matches this actor">
               <CanvasLegend fragment={data.affected} />
             </GraphCanvas>
+            </div>
           </Panel>
           <Panel title={`Matched alerts (${matched.length})`} flush>
             {alertsQ.isLoading && <SkeletonBlock lines={3} className="p-3" />}

@@ -15,7 +15,7 @@ export function KeyValueTable({ data, className, mono = true, order, hide = [] }
   const sorted = order ? [...order.filter((k) => keys.includes(k)), ...keys.filter((k) => !order.includes(k))] : keys
   if (!sorted.length) return <div className="p-3 text-xs text-fg-3">No fields</div>
   return (
-    <table className={`w-full text-xs ${className ?? ''}`}>
+    <table className={`w-full table-fixed text-xs ${className ?? ''}`}>
       <tbody>
         {sorted.map((k) => {
           const v = data[k]

@@ -30,7 +30,7 @@ export function Composer() {
             }
           }}
           rows={Math.min(5, Math.max(1, draft.split('\n').length))}
-          placeholder="Ask the analyst… (Enter sends, Shift+Enter for a new line)"
+          placeholder="Ask the analyst… (Enter sends)"
           className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent text-[13px] leading-snug text-fg placeholder:text-fg-3 focus:outline-none"
         />
         {streaming ? (

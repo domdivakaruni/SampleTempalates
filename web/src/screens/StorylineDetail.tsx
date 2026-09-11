@@ -61,11 +61,13 @@ export function StorylineDetail() {
       <StorylineHeader story={story} />
       <div className="grid gap-3 p-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="min-w-0 space-y-3">
-          <Panel title="Kill chain" flush bodyClassName="relative h-[400px]">
+          <Panel title="Kill chain" flush>
+            <div className="relative h-[400px]">
             <GraphCanvas ref={ref} fragment={story.fragment ?? null} onSelectNode={(n) => pick(n?.id ?? null)} onDoubleClickNode={(n) => void ops.expand(n.id)} contextActions={contextActions} emptyHint="This storyline has no graph fragment">
               <CanvasLegend fragment={story.fragment} />
               <CanvasDetailsOverlay nodeId={selected} onClose={() => pick(null)} onExpand={(nid) => void ops.expand(nid)} onBlastRadius={(nid) => void ops.blast(nid)} />
             </GraphCanvas>
+            </div>
           </Panel>
           <Panel title="Stages (click to highlight)">
             <StageStrip stages={story.stages} activeOrder={activeStage} onSelect={showStage} />

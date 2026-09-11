@@ -96,7 +96,7 @@ export function NodeDetailsPanel({ nodeId, onClose, onExpand, onBlastRadius, cla
             {groupProps(q.data.node.props).map(([title, rows]) => (
               <div key={title} className="mt-3">
                 <div className="panel-title mb-1">{title}</div>
-                <table className="w-full">
+                <table className="w-full table-fixed">
                   <tbody>
                     {rows.map(([k, v]) => (
                       <tr key={k} className="border-b border-line/50 align-top last:border-0">

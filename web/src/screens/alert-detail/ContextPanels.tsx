@@ -92,7 +92,7 @@ export function ContextPanels({ ctx, ops, active, onActive }: Props) {
       </Panel>
       <Panel title={`Related alerts (${ctx.related_alerts.length})`} flush>
         {ctx.related_alerts.length ? (
-          <AlertsTable alerts={ctx.related_alerts} columns={['title', 'vendor', 'contextual', 'time']} emptyTitle="No related alerts" className="max-h-[320px]" />
+          <AlertsTable alerts={ctx.related_alerts} columns={['title', 'vendor', 'contextual']} emptyTitle="No related alerts" className="max-h-[320px]" />
         ) : (
           <div className="p-3 text-xs text-fg-3">No other alert shares this storyline or asset.</div>
         )}

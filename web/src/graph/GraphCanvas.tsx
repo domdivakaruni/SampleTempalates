@@ -6,9 +6,10 @@ import type { EdgeOut, GraphFragment, NodeOut } from '../api/types'
 import { CanvasToolbar } from './CanvasToolbar'
 import { ContextMenu, type ContextAction } from './ContextMenu'
 import { fragmentElements, fragmentHighlightIds } from './elements'
-import { layoutForHint, layoutOptions, type LayoutName } from './layouts'
+import { layoutForFragment, layoutOptions, primaryPath, type LayoutExtras, type LayoutName } from './layouts'
 import { graphStylesheet } from './styles'
 
+const MAX_FIT_ZOOM = 1.35
 let registered = false
 function ensureExtensions() {
   if (registered) return
@@ -69,12 +70,34 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     if (cy) setCounts({ nodes: cy.nodes().length, edges: cy.edges().length })
   }, [])
 
-  const runLayout = useCallback((name: LayoutName, randomize: boolean, hint?: GraphFragment['layout_hint'] | null) => {
+  const pathRef = useRef<string[]>([])
+
+  const runLayout = useCallback((name: LayoutName, randomize: boolean, hint?: GraphFragment['layout_hint'] | null, after?: () => void, extras: Pick<LayoutExtras, 'path'> = {}) => {
     const cy = cyRef.current
     if (!cy || cy.nodes().length === 0) return
     const el = containerRef.current
     if (!el || el.clientWidth === 0 || el.clientHeight === 0) pendingFit.current = true
-    cy.layout(layoutOptions(name, cy.nodes().length, { randomize, hint })).run()
+    const path = (extras.path ?? pathRef.current).filter((id) => cy.getElementById(id).length > 0)
+    const layout = cy.layout(layoutOptions(name, cy.nodes().length, { randomize, hint, path }))
+    if (after) layout.one('layoutstop', after)
+    layout.run()
+  }, [])
+
+  /**
+   * Fit the viewport to a set of element ids (the highlighted path) so long storyline chains stay legible.
+   * Needs at least two highlighted nodes and never zooms past MAX_FIT_ZOOM (a lone node would fill the canvas).
+   */
+  const fitTo = useCallback((ids: string[], padding = 60) => {
+    const cy = cyRef.current
+    if (!cy) return
+    const eles = cy.collection()
+    for (const id of ids) eles.merge(cy.getElementById(id))
+    if (eles.nodes().length < 2) return
+    const bb = eles.boundingBox({ includeLabels: true })
+    const w = Math.max(1, cy.width() - 2 * padding), h = Math.max(1, cy.height() - 2 * padding)
+    const zoom = Math.min(MAX_FIT_ZOOM, w / Math.max(1, bb.w), h / Math.max(1, bb.h))
+    const pan = { x: cy.width() / 2 - zoom * (bb.x1 + bb.w / 2), y: cy.height() / 2 - zoom * (bb.y1 + bb.h / 2) }
+    cy.animate({ zoom, pan, duration: 300, easing: 'ease-out' })
   }, [])
 
   const applyHighlight = useCallback((ids: string[], dim = true, fit = true) => {
@@ -161,15 +184,16 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
         if (!labelsRef.current) cy.nodes().addClass('nolabel')
         for (const id of f.focus) cy.getElementById(id).addClass('focus')
       })
-      const name = opts.layout ?? layoutForHint(f.layout_hint)
+      const name = opts.layout ?? layoutForFragment(f)
       layoutRef.current = name
       setLayoutName(name)
-      runLayout(name, true, f.layout_hint)
+      pathRef.current = primaryPath(f)
       const hl = fragmentHighlightIds(f)
       if (hl.length) applyHighlight(hl, true, false)
+      runLayout(name, true, f.layout_hint, hl.length ? () => fitTo(hl) : undefined, { path: pathRef.current })
       refreshCounts()
     },
-    [applyHighlight, refreshCounts, runLayout],
+    [applyHighlight, fitTo, refreshCounts, runLayout],
   )
 
   const mergeFragment = useCallback(
@@ -182,17 +206,19 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
         return
       }
       const fresh = fragmentElements(f).filter((el) => cy.getElementById(String(el.data.id)).length === 0)
+      const ids = [...f.nodes.map((n) => n.id), ...f.edges.map((e) => e.id)]
       if (fresh.length) {
         cy.batch(() => {
           cy.add(fresh)
           if (!labelsRef.current) cy.nodes().addClass('nolabel')
         })
-        if (opts.relayout !== false) runLayout(layoutRef.current, layoutRef.current !== 'fcose', f.layout_hint)
-      }
-      if (opts.highlight) applyHighlight([...f.nodes.map((n) => n.id), ...f.edges.map((e) => e.id)], true, true)
+        if (opts.highlight) applyHighlight(ids, true, false)
+        if (opts.relayout !== false) runLayout(layoutRef.current, layoutRef.current !== 'fcose', f.layout_hint, opts.highlight ? () => fitTo(ids) : undefined)
+        else if (opts.highlight) fitTo(ids)
+      } else if (opts.highlight) applyHighlight(ids, true, true)
       refreshCounts()
     },
-    [applyHighlight, refreshCounts, runLayout, setFragment],
+    [applyHighlight, fitTo, refreshCounts, runLayout, setFragment],
   )
 
   useImperativeHandle(
@@ -262,7 +288,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
 
   return (
     <div className={`relative h-full w-full overflow-hidden bg-bg ${className ?? ''}`}>
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="h-full w-full" />
       {counts.nodes === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-fg-3">{emptyHint ?? 'No graph loaded'}</div>
       )}

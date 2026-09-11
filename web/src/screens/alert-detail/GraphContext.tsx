@@ -35,8 +35,8 @@ export function GraphContext({ ctx }: { ctx: AlertContext }) {
           contextActions={contextActions}
           emptyHint="No evidence fragment for this alert"
         >
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-line bg-panel/85 px-2 py-1 text-[10.5px] text-fg-2 backdrop-blur">
-            Evidence · {ctx.evidence.nodes.length} nodes, {ctx.evidence.edges.length} edges · layout {hint === 'path' ? 'path (dagre LR)' : hint === 'storyline' ? 'storyline (dagre LR)' : `${hint} (fcose)`}
+          <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[calc(100%-360px)] truncate rounded-md border border-line bg-panel/85 px-2 py-1 text-[10.5px] text-fg-2 backdrop-blur">
+            Evidence · {ctx.evidence.nodes.length} nodes, {ctx.evidence.edges.length} edges · layout {hint}{hint === 'path' || hint === 'storyline' ? ' (attack path pinned left → right)' : ''}
             {ctx.evidence.truncated && <span className="ml-1 text-sev-medium">truncated</span>}
             <span className="ml-2 text-fg-3">double-click expands · right-click for actions</span>
           </div>

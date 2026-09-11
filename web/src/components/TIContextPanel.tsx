@@ -61,9 +61,9 @@ export function TIContextPanel({ ti, compact, onEvidence }: Props) {
                   <span className="chip border-line-2 text-fg-3 uppercase">{m.ioc_type}</span>
                   <span className="mono truncate text-[11px] text-fg" title={m.value}>{m.value.length > 34 ? `${m.value.slice(0, 16)}…${m.value.slice(-12)}` : m.value}</span>
                 </span>
-                <span className="flex shrink-0 items-center gap-2">
+                <span className="flex min-w-0 shrink items-center gap-2">
                   <span className="text-fg-3">on</span>
-                  <NodeRef id={m.matched_node_id} label={m.matched_label} name={shortId(m.matched_node_id)} mono />
+                  <NodeRef id={m.matched_node_id} label={m.matched_label} name={shortValue(shortId(m.matched_node_id))} mono />
                   <ConfidenceDots value={m.confidence} />
                 </span>
               </li>
@@ -93,6 +93,11 @@ export function TIContextPanel({ ti, compact, onEvidence }: Props) {
       )}
     </div>
   )
+}
+
+/** Hashes and other long ids: keep both ends so they stay recognisable. */
+function shortValue(v: string): string {
+  return v.length > 28 ? `${v.slice(0, 12)}…${v.slice(-8)}` : v
 }
 
 export function ConfidenceDots({ value }: { value: number }) {
