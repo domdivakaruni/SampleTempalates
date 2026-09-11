@@ -106,7 +106,7 @@ def _idp_n004(ctx: Ctx) -> None:
         "eventType": "policy.evaluate_sign_on",
         "displayMessage": "Impossible travel detected",
         "actor": {"id": S.USER_PKAUR, "alternateId": "pkaur@corp.larkspur.example", "displayName": "Priya Kaur"},
-        "first_login": {"time": "2026-09-11T07:02:00Z", "city": "London", "country": "GB", "ip": "203.0.113.150"},
+        "first_login": {"time": "2026-09-11T07:02:00Z", "city": "London", "country": "GB", "ip": "198.18.7.42"},
         "second_login": {"time": "2026-09-11T07:48:00Z", "city": "New York", "country": "US", "ip": S.VPN_EGRESS_IP},
         "outcome": {"result": "SUCCESS"}, "mfa": "satisfied",
         "note": "second login egress is the corporate VPN concentrator",

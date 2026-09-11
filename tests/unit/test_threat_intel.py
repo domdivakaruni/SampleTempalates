@@ -253,9 +253,12 @@ def test_generated_ipv4_excludes_infra_and_scanner(nodes: list[dict]):
                if n["label"] == "Indicator" and n["props"]["ioc_type"] == "ipv4"}
     # infra IPs must never appear as indicators
     assert not ({SC.BASTION_PUBLIC_IP, SC.EDGE_PUBLIC_IP, SC.VPN_EGRESS_IP} & gen_ips)
-    # every ipv4 indicator is inside the documentation ranges
+    # every ipv4 indicator lives in the indicator block or the deliberate-plant block, never in the estate's
+    # public block or the noise blocks (docs/04-storyline.md section 4: noise sources are "none in TI")
     for ip in gen_ips:
-        assert ip.startswith("203.0.113.") or ip.startswith("198.51.100.")
+        assert ip.startswith(f"{SC.IP_BLOCK_TI_INDICATORS}.") or ip.startswith(f"{SC.IP_BLOCK_PLANTS}."), ip
+        assert not ip.startswith(f"{SC.IP_BLOCK_ESTATE_PUBLIC}.")
+        assert not any(ip.startswith(f"{b}.") for b in SC.IP_BLOCKS_NOISE)
 
 
 def test_low_confidence_plants(out_dir: Path):

@@ -204,3 +204,11 @@ QUARANTINE_ALERT_IDS = [f"alert:falcon:ldt-n{n:03d}" for n in range(5, 17)]
 
 # sectors used across TI
 SECTORS = ["financial-services", "healthcare", "energy", "public-sector", "technology", "retail", "manufacturing", "telecommunications"]
+
+# ------------------------------------------------------------------ external IP allocation (disjoint by construction)
+# Every generator draws external addresses from its own reserved block so that noise traffic never matches a
+# threat-intel indicator by accident (docs/04-storyline.md section 4: "none in TI").
+IP_BLOCK_TI_INDICATORS = "203.0.113"          # TEST-NET-3: attacker infrastructure and generated indicators
+IP_BLOCK_ESTATE_PUBLIC = "198.51.100"         # TEST-NET-2: Larkspur's own public IPs (bastion, edge, VPN egress, VMs, LBs)
+IP_BLOCKS_NOISE = ("192.0.2", "198.18.0", "198.18.1", "198.18.2")  # TEST-NET-1 + benchmarking range: scanners, benign traffic
+IP_BLOCK_PLANTS = "198.18.200"                # low-confidence indicators the build deliberately plants on random telemetry

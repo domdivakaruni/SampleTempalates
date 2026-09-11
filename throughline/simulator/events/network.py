@@ -82,11 +82,12 @@ _NAMED_PUBLIC = {S.ATTACKER_EGRESS_IP, S.C2_IP, S.SALTWORKS_IP, S.VPN_EGRESS_IP,
 
 
 def doc_public_ips(n: int) -> list[str]:
-    """A deterministic ordered list of up to ~750 distinct documentation-range public IPs (RFC 5737),
-    excluding the named campaign/infra addresses. Noise generators index into this for source IPs."""
+    """A deterministic ordered list of up to ~1000 distinct reserved-range public IPs (RFC 5737 TEST-NET-1 and
+    the RFC 2544 benchmarking range), excluding the named campaign/infra addresses. Noise generators index into
+    this for source IPs; the block is disjoint from threat-intel indicators and from the estate's public range."""
     out: list[str] = []
     for octet in range(2, 255):
-        for block in ("192.0.2", "198.51.100", "203.0.113"):
+        for block in S.IP_BLOCKS_NOISE:  # disjoint from indicator and estate blocks by construction
             addr = f"{block}.{octet}"
             if addr not in _NAMED_PUBLIC:
                 out.append(addr)

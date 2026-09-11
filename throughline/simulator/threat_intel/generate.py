@@ -380,7 +380,7 @@ def _build_generated_indicators(m: Model, campaign_reports: dict[str, list[str]]
     # deterministic ipv4 pool
     pool_rng = rng("ti:ipv4-pool")
     excluded = _STORYLINE_IPS | _INFRA_IPS | {p.value for p in cat.PLANTS if p.ioc_type == "ipv4"}
-    pool = [f"203.0.113.{o}" for o in range(1, 255)] + [f"198.51.100.{o}" for o in range(1, 255)]
+    pool = [f"{SC.IP_BLOCK_TI_INDICATORS}.{o}" for o in range(1, 255)]  # indicators live in their own block
     pool = [ip for ip in pool if ip not in excluded]
     pool_rng.shuffle(pool)
 

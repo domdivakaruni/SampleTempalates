@@ -392,8 +392,8 @@ EXPLOITS: list[ExploitSpec] = [
 # shows confidence-weighted matches. All tied to old (historical/dormant) campaigns.
 
 PLANTS: list[PlantSpec] = [
-    PlantSpec("ipv4", "203.0.113.150", 0.45, "campaign:ti:drift-current", 1, "2025-06-20", "2025-09-30"),
-    PlantSpec("ipv4", "198.51.100.77", 0.40, "campaign:ti:lantern-march", 6, "2025-08-20", "2025-11-01"),
+    PlantSpec("ipv4", "198.18.200.150", 0.45, "campaign:ti:drift-current", 1, "2025-06-20", "2025-09-30"),
+    PlantSpec("ipv4", "198.18.200.77", 0.40, "campaign:ti:lantern-march", 6, "2025-08-20", "2025-11-01"),
     PlantSpec("domain", "legacy-update.example", 0.50, "campaign:ti:tin-cadence", 6, "2026-02-15", "2026-05-01"),
     PlantSpec("domain", "metrics-collector.test", 0.35, "campaign:ti:vireo-echo", 6, "2025-11-06", "2026-01-15"),
     PlantSpec("sha256", "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90", 0.40,
