@@ -66,7 +66,7 @@ def make_store(settings: Any, graph: ContextGraph) -> GraphStore:
     # embedded engines
     from throughline.graph.ladybug_store import LadybugStore  # noqa: PLC0415 - keeps the engine import lazy
 
-    db_path = Path(getattr(settings, "graph_db_path"))
+    db_path = Path(settings.graph_db_path)
     db_present = db_path.exists()
     if not db_present:
         log.warning(

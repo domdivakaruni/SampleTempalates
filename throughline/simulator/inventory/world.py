@@ -10,8 +10,14 @@ from dataclasses import dataclass, field
 
 from throughline.simulator import storyline_constants as sc
 from throughline.simulator.common import pick, rng
-
-from throughline.simulator.inventory._base import SOURCE_OKTA, SOURCE_WIZ, Inventory, days_ago, hexid, minutes_ago
+from throughline.simulator.inventory._base import (
+    SOURCE_OKTA,
+    SOURCE_WIZ,
+    Inventory,
+    days_ago,
+    hexid,
+    minutes_ago,
+)
 from throughline.simulator.inventory.names import FIRST_NAMES, LAST_NAMES, LOCATIONS, TITLES
 
 TARGET_USERS = 1400

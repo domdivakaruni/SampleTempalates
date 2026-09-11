@@ -53,7 +53,7 @@ _QPP_BRACES_RE = re.compile(r"\)\s*\{\s*(\d*)\s*(,?)\s*(\d*)\s*\}")
 _QPP_SYMBOL_RE = re.compile(r"\)\s*([+*])")
 _LIMIT_RE = re.compile(r"(?<![\w.$])LIMIT\b", re.IGNORECASE)
 _RETURN_RE = re.compile(r"(?<![\w.$])RETURN\b", re.IGNORECASE)
-_LIMIT_VALUE_RE = re.compile(r"LIMIT\s+(\S+)", re.IGNORECASE)
+_LIMIT_VALUE_RE = re.compile(r"LIMIT\s+(\S+)(.*)$", re.IGNORECASE | re.DOTALL)
 
 
 def _strip_comments_and_mask(query: str) -> tuple[str, str]:
@@ -162,8 +162,8 @@ def _apply_row_limit(clean: str, masked: str, row_limit: int) -> str:
         if value_match is None:
             raise QueryRejected("LIMIT must be followed by an integer literal")
         token = value_match.group(1).rstrip(";")
-        if not token.isdigit():
-            raise QueryRejected("LIMIT must be an integer literal (parameters and expressions are not allowed here)")
+        if not token.isdigit() or value_match.group(2).strip():
+            raise QueryRejected("LIMIT must be a single integer literal at the end of the query (parameters and expressions are not allowed)")
         if int(token) > row_limit:
             start = value_match.start(1)
             return clean[:start] + str(row_limit) + clean[start + len(token) :]

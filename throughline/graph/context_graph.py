@@ -393,7 +393,7 @@ class ContextGraph:
     # ------------------------------------------------------------------ export
 
     def iter_node_records(self) -> Iterator[dict[str, Any]]:
-        for nid, attrs in self.G.nodes(data=True):
+        for _nid, attrs in self.G.nodes(data=True):
             rec = {k: attrs.get(k) for k in NODE_META_KEYS}
             rec["props"] = {k: v for k, v in attrs.items() if k not in NODE_META_KEYS}
             yield rec

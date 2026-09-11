@@ -72,8 +72,12 @@ _FALSE = {"false", "f", "no", "n", "0"}
 
 
 def graph_paths(data_dir: Path | str) -> tuple[Path, Path, Path]:
-    """``(nodes.jsonl, edges.jsonl, manifest.json)`` under ``<data_dir>/graph/``."""
-    base = Path(data_dir) / GRAPH_SUBDIR
+    """``(nodes.jsonl, edges.jsonl, manifest.json)`` under ``<data_dir>/graph/`` (the generated layout) or directly
+    under ``<data_dir>`` when there is no ``graph/`` directory (the committed fixtures)."""
+    root = Path(data_dir)
+    base = root / GRAPH_SUBDIR
+    if not (base / NODES_FILE).exists() and (root / NODES_FILE).exists():
+        base = root
     return base / NODES_FILE, base / EDGES_FILE, base / MANIFEST_FILE
 
 

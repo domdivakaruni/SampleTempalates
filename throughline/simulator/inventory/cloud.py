@@ -13,7 +13,6 @@ from typing import Any
 
 from throughline.simulator import storyline_constants as sc
 from throughline.simulator.common import pick, rng
-
 from throughline.simulator.inventory._base import (
     ANYWHERE,
     INTERNET_ID,

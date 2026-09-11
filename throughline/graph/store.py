@@ -30,7 +30,14 @@ from pydantic import BaseModel
 
 from throughline.graph.context_graph import EDGE_META_KEYS, NODE_META_KEYS, edge_id
 from throughline.models import EdgeOut, GraphFragment, NodeOut, SearchHit, StatsOut
-from throughline.schema import CATEGORIES, COMMON_EDGE_COLUMNS, COMMON_NODE_COLUMNS, EDGE_TYPES, LABELS, category_of
+from throughline.schema import (
+    CATEGORIES,
+    COMMON_EDGE_COLUMNS,
+    COMMON_NODE_COLUMNS,
+    EDGE_TYPES,
+    LABELS,
+    category_of,
+)
 
 # ----------------------------------------------------------------------------- contract types
 

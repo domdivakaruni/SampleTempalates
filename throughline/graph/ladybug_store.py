@@ -28,7 +28,7 @@ Reads
 ``open`` reopens the database with ``read_only=True`` (engine-enforced), every call uses its own ``Connection``
 with ``set_query_timeout``; user Cypher goes through ``cypher_gate.check_readonly`` first. ``neighborhood`` uses
 ``-[e* SHORTEST 1..depth]-`` so each reachable node is reported once with its hop distance (the same set as
-``ContextGraph.k_hop``); ``search`` delegates to the attached ``ContextGraph`` (token index, identical ranking
+``ContextGraph.k_hop``; label-filtered neighborhoods expand hop by hop instead, see ``_frontier_hops``); ``search`` delegates to the attached ``ContextGraph`` (token index, identical ranking
 to the NetworkX backend) and falls back to a Cypher ``lower(n.name) CONTAINS`` scan when none is attached.
 """
 from __future__ import annotations
@@ -51,13 +51,21 @@ from typing import Any
 from throughline.graph import loader
 from throughline.graph.context_graph import ContextGraph
 from throughline.graph.cypher_gate import check_readonly
-from throughline.graph.store import BaseStore, CypherResult, NotSupported, QueryRejected, QueryTimeout, format_timestamp
+from throughline.graph.store import (
+    BaseStore,
+    CypherResult,
+    NotSupported,
+    QueryRejected,
+    QueryTimeout,
+    format_timestamp,
+)
 from throughline.models import GraphFragment, SearchHit, StatsOut
 from throughline.schema import EDGE_TYPES, LABELS, label_for_id
 
 log = logging.getLogger(__name__)
 
 ENGINES = ("ladybug", "kuzu")
+ARROWS = {"out": ("-", "->"), "in": ("<-", "-"), "both": ("-", "-")}
 
 # Table/column names that must be backtick-quoted in this dialect. ``Group`` is the one that bites us; the rest
 # are engine keywords kept here so a future label or column with one of these names keeps working.
@@ -560,6 +568,29 @@ class LadybugStore(BaseStore):
         records.sort(key=lambda r: (position[r["src"]], r["type"], position[r["dst"]]))
         return records
 
+    def _frontier_hops(self, node_id: str, depth: int, types: list[str] | None, direction: str, wanted: list[str] | None) -> dict[str, int]:
+        """Per-hop frontier expansion with exact ``ContextGraph.k_hop`` semantics (one query per hop, no path
+        enumeration). Used whenever a label filter is present: Kuzu 0.11.3 ignores node predicates inside
+        ``SHORTEST`` recursive patterns and LadybugDB applies them to the start node as well, so the single-query
+        form cannot express "expand only through these labels" portably."""
+        left, right = ARROWS[direction]
+        where = ["n.id IN $ids"]
+        if types:
+            where.append("label(e) IN [" + ", ".join(lit(t) for t in types) + "]")
+        if wanted:
+            where.append("label(m) IN [" + ", ".join(lit(lbl) for lbl in wanted) + "]")
+        query = f"MATCH (n){left}[e]{right}(m) WHERE {' AND '.join(where)} RETURN DISTINCT m.id"
+        hops = {node_id: 0}
+        frontier = [node_id]
+        for hop in range(1, depth + 1):
+            _, _, rows = self._execute(query, {"ids": frontier})
+            frontier = sorted({m for (m,) in rows if m not in hops})
+            for m in frontier:
+                hops[m] = hop
+            if not frontier:
+                break
+        return hops
+
     def neighborhood(
         self,
         node_id: str,
@@ -578,30 +609,30 @@ class LadybugStore(BaseStore):
         if start is None:
             return GraphFragment(focus=[node_id], layout_hint="neighborhood", total_nodes=0)
 
-        left, right = {"out": ("-", "->"), "in": ("<-", "-"), "both": ("-", "-")}[direction]
-        filters: list[str] = []
-        if types:
-            filters.append("label(r) IN [" + ", ".join(lit(t) for t in types) + "]")
         if wanted:
-            filters.append("label(x) IN [" + ", ".join(lit(lbl) for lbl in wanted) + "]")
-        recursive_filter = f" (r, x | WHERE {' AND '.join(filters)})" if filters else ""
-        where = ["m.id <> $id"]
-        if wanted:
-            where.append("label(m) IN [" + ", ".join(lit(lbl) for lbl in wanted) + "]")
-        start_pattern = f"(n:{ident(start['label'])} {{id: $id}})" if start["label"] in LABELS else "(n {id: $id})"
-        pattern = f"MATCH {start_pattern}{left}[e* SHORTEST 1..{depth}{recursive_filter}]{right}(m) WHERE {' AND '.join(where)}"
-        _, _, rows = self._execute(
-            f"{pattern} RETURN m AS node, length(e) AS hops ORDER BY hops, m.id LIMIT {max_nodes}", {"id": node_id}
-        )
-        truncated = len(rows) >= max_nodes  # start node + max_nodes others would exceed the cap
-        others = [self._node_record(d) for d, _ in rows[: max_nodes - 1]]
+            hops = self._frontier_hops(node_id, depth, types, direction, wanted)
+            other_ids = sorted((i for i in hops if i != node_id), key=lambda i: (hops[i], i))
+            total = 1 + len(other_ids)
+            truncated = total > max_nodes
+            others = self.get_nodes(other_ids[: max_nodes - 1])
+        else:
+            # one row per reachable node with its hop distance; the recursive filter restricts the edge types
+            left, right = ARROWS[direction]
+            recursive_filter = f" (r, x | WHERE label(r) IN [{', '.join(lit(t) for t in types)}])" if types else ""
+            start_pattern = f"(n:{ident(start['label'])} {{id: $id}})" if start["label"] in LABELS else "(n {id: $id})"
+            pattern = f"MATCH {start_pattern}{left}[e* SHORTEST 1..{depth}{recursive_filter}]{right}(m) WHERE m.id <> $id"
+            _, _, rows = self._execute(
+                f"{pattern} RETURN m AS node, length(e) AS hops ORDER BY hops, m.id LIMIT {max_nodes}", {"id": node_id}
+            )
+            truncated = len(rows) >= max_nodes  # the start node plus max_nodes others would exceed the cap
+            others = [self._node_record(d) for d, _ in rows[: max_nodes - 1]]
+            total = 1 + len(others)
+            if truncated:
+                _, _, count_rows = self._execute(f"{pattern} RETURN count(DISTINCT m.id)", {"id": node_id})
+                total = 1 + int(count_rows[0][0]) if count_rows else total
+
         records = [start, *others]
         ids = [r["id"] for r in records]
-        total = len(records)
-        if truncated:
-            _, _, count_rows = self._execute(f"{pattern} RETURN count(DISTINCT m.id)", {"id": node_id})
-            total = 1 + int(count_rows[0][0]) if count_rows else len(records)
-
         if self.graph is not None and all(i in self.graph for i in ids):
             fragment = self.graph.fragment(ids, focus=[node_id], layout_hint="neighborhood", max_nodes=max_nodes)
             fragment.truncated = fragment.truncated or truncated

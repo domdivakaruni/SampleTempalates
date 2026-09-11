@@ -173,6 +173,7 @@ export class MockGraph {
       if (cur.edges.length >= maxHops) continue
       for (const e of this.edgesOf(cur.node)) {
         if (edgeTypes?.length && !edgeTypes.includes(e.type)) continue
+        if (e.props.transitive === true) continue // derived shortcut edges hide the real hop count
         const other = e.src === cur.node ? e.dst : e.src
         if (cur.nodes.includes(other)) continue
         queue.push({ node: other, nodes: [...cur.nodes, other], edges: [...cur.edges, e.id] })

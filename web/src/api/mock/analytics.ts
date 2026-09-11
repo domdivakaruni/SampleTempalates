@@ -12,7 +12,6 @@ import { tiContextForNode } from './ti'
 
 const REACH_EDGES = new Set(['ON_ENDPOINT', 'ON_RESOURCE', 'SAME_AS', 'HAS_ROLE', 'CAN_ASSUME', 'CAN_ACCESS', 'UNLOCKS', 'MAPS_TO', 'HAS_POLICY', 'GRANTS', 'LATERAL_MOVEMENT_TO', 'CREDENTIAL_FOR', 'INVOLVES'])
 const REACH_REVERSE = new Set(['STOLEN_BY'])
-const SENSITIVE = new Set(['PCI', 'PII', 'PHI', 'SECRETS'])
 
 // ----------------------------------------------------------------------------- helpers
 

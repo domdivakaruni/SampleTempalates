@@ -7,7 +7,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from throughline.simulator import storyline_constants as sc
-
 from throughline.simulator.inventory._base import SOURCE_WIZ, Inventory
 from throughline.simulator.inventory.world import TEAM_BY_SLUG, World
 

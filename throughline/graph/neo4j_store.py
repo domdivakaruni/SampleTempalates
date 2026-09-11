@@ -30,7 +30,14 @@ from typing import Any
 from throughline.graph import loader
 from throughline.graph.context_graph import ContextGraph
 from throughline.graph.cypher_gate import check_readonly
-from throughline.graph.store import BaseStore, CypherResult, NotSupported, QueryRejected, QueryTimeout, format_timestamp
+from throughline.graph.store import (
+    BaseStore,
+    CypherResult,
+    NotSupported,
+    QueryRejected,
+    QueryTimeout,
+    format_timestamp,
+)
 from throughline.models import GraphFragment, SearchHit, StatsOut
 from throughline.schema import EDGE_TYPES, LABELS
 

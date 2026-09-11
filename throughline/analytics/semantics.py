@@ -67,6 +67,12 @@ class Rule:
     depth_cost: int = 1
     access: bool = True
     skip_if: Callable[[dict[str, Any]], bool] | None = None
+    access_reverse: bool | None = None  # defaults to ``access``; lets a direction count as movement only
+
+    def is_access(self, direction: str) -> bool:
+        if direction == "reverse" and self.access_reverse is not None:
+            return self.access_reverse
+        return self.access
 
 
 def _p_can_access(data: dict[str, Any]) -> float:
@@ -102,7 +108,8 @@ RULES: dict[str, Rule] = {
     "CREDENTIAL_FOR": Rule("forward", 0.9),
     "DERIVED_FROM": Rule("reverse", p_reverse=0.9),
     "LOGGED_ON": Rule("both", 0.5, 0.6, access=False),
-    "PRIMARY_USER": Rule("both", 0.6, 0.6, access=False),
+    # endpoint -> its primary user counts as access (SSO sessions live on the device); user -> endpoint is movement
+    "PRIMARY_USER": Rule("both", 0.6, 0.6, access=True, access_reverse=False),
     "LATERAL_MOVEMENT_TO": Rule("forward", 0.8, access=False),
     "ROUTES_TO": Rule("forward", 0.5, access=False),
     "HAS_NODE": Rule("reverse", p_reverse=0.6, access=False),
@@ -171,11 +178,11 @@ class Semantics:
             else:
                 p = _p_of(rule.p_forward, data)
             if p > 0:
-                out.append(Move(u, v, p, etype, "forward", rule.depth_cost, rule.access, data))
+                out.append(Move(u, v, p, etype, "forward", rule.depth_cost, rule.is_access("forward"), data))
         if rule.direction in ("reverse", "both"):
             p = _p_of(rule.p_reverse, data)
             if p > 0:
-                out.append(Move(v, u, p, etype, "reverse", rule.depth_cost, rule.access, data))
+                out.append(Move(v, u, p, etype, "reverse", rule.depth_cost, rule.is_access("reverse"), data))
         return out
 
     def implicit_moves(self, node_id: str) -> list[Move]:
@@ -403,6 +410,3 @@ EDGE_STAGE: dict[str, int] = {
 def stage_for_edge(etype: str, default: int = 2) -> int:
     return EDGE_STAGE.get(etype, default)
 
-
-def sort_key(nid: str) -> str:
-    return nid
