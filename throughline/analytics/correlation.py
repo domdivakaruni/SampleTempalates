@@ -3,12 +3,24 @@
 Lateral movement: a logon onto endpoint B whose source IP is endpoint A's private IP, preceded by an alert on A
 within 48 h (or an SSH/RDP alert on B naming A's IP) -> ``LATERAL_MOVEMENT_TO A -> B``.
 
-Storylines: union-find over alerts and (anomalous / stolen-credential / IOC-matching) cloud events that share a
-pivot within a time window - host (endpoint and its SAME_AS VM are one pivot), identity anchor, credential lineage,
-source IP, matched high-confidence IOC campaign, lateral-movement edge, vendor incident. Hub pivots (Internet,
-scanner, VPN, NAT, > 200 links) and benign-explained alerts never link anything. Clusters with >= 3 members and an
-EDR alert, or containing a crown-jewel-reaching credential chain, become ``Storyline`` nodes with ``IN_STORYLINE``
-and ``NEXT_STAGE`` edges.
+Storylines: union-find over *members* - detections that are not benign-explained (posture findings are state, not
+events, and never join) plus anomalous / stolen-credential / IOC-matching cloud events - that share a pivot within
+a time window:
+
+* host (an endpoint and its SAME_AS VM are one pivot; 24 h): detections chain with each other, while a WAF / IDS
+  alert only joins a detection that follows or precedes it within ``WINDOW_NETWORK_H`` - repeated probes of a
+  public host are the WAF's job to aggregate;
+* identity anchor / credential lineage / campaign of a high-confidence indicator / a cloud event the alert cites
+  (7 days);
+* shared external ip, only when the ip carries threat intelligence or a bad reputation (24 h);
+* a derived ``LATERAL_MOVEMENT_TO`` edge (detections on the source host before it, on the target host after it).
+
+Hub pivots (Internet, scanner, VPN, NAT, > 200 links) never link anything and vendor incident grouping is not used
+as evidence. A cluster becomes a ``Storyline`` (with ``IN_STORYLINE`` and ``NEXT_STAGE`` edges) when it contains a
+stolen credential whose lineage reaches a crown jewel, or when it is a multi-stage narrative - >= 3 members, at
+least one host / cloud / identity detection, >= 2 kill-chain stages - corroborated by at least one of: two data
+sources, an active-campaign indicator, lateral movement, a credential pivot, or an anchor that reaches a crown
+jewel. Attribution uses high-confidence votes only, with a technique-overlap fallback.
 """
 from __future__ import annotations
 
@@ -20,7 +32,8 @@ from typing import Any
 
 from throughline.analytics import semantics as sem
 from throughline.analytics.context import NOW, AnalyticsContext, as_list, fmt_time, parse_time
-from throughline.analytics.ti import actor_of, campaign_of
+from throughline.analytics.ti import actor_of, campaign_of, campaign_techniques, relevance_of
+from throughline.graph.context_graph import ContextGraph
 from throughline.models import GraphFragment, StageOut, StorylineOut
 
 DERIVED = "derived"
@@ -28,7 +41,15 @@ LM_LOOKBACK_HOURS = 48.0
 LM_FOLLOW_HOURS = 1.0
 WINDOW_HOST_H = 24.0
 WINDOW_IDENTITY_H = 24.0 * 7
+WINDOW_NETWORK_H = 2.0  # a WAF / IDS alert joins a host detection only this close in time
 MIN_IOC_PIVOT_CONFIDENCE = 0.7
+MIN_IP_PIVOT_CONFIDENCE = 0.5  # a shared external ip is a pivot only with an indicator at least this confident
+MIN_VOTE_CONFIDENCE = 0.7  # attribution votes below this never name a storyline
+MIN_TTP_TECHNIQUES = 4  # technique-overlap attribution needs this many shared techniques ...
+MIN_TTP_RATIO = 0.6  # ... covering this share of the storyline's techniques
+MAX_STORYLINE_MEMBERS = 50
+ROUTINE_LOGON_MIN = 5  # a (principal, host, type, source ip) logon seen this often is a baseline, not movement
+NETWORK_SOURCES = frozenset({"waf", "ids"})
 HUB_MEMBER_LIMIT = 200
 LATERAL_TECHNIQUE_PREFIXES = ("T1021", "T1550")
 LOGON_PROTOCOL = {"ssh": "ssh", "remote_interactive": "rdp", "rdp": "rdp", "network": "smb", "smb": "smb", "winrm": "winrm", "psexec": "psexec"}
@@ -70,14 +91,21 @@ def derive_lateral_movement(ctx: AnalyticsContext) -> dict[str, int]:
                 out.append(ep)
         return out
 
-    # rule 1: logon onto B from A's ip, alert on A in the preceding 48h
-    for user, b, d in [(u, v, dd) for u, v, dd in g.G.edges(data=True) if dd.get("type") == "LOGGED_ON"]:
+    # rule 1: logon onto B from A's ip, alert on A in the preceding 48h. A logon that belongs to a routine baseline
+    # (the same principal, host, logon type and source ip seen ROUTINE_LOGON_MIN+ times, e.g. a nightly SFTP
+    # transfer) only counts as movement when a detection on B follows it within LM_FOLLOW_HOURS.
+    logons = [(u, v, dd) for u, v, dd in g.G.edges(data=True) if dd.get("type") == "LOGGED_ON"]
+    baseline: dict[tuple[str, str, str, str], int] = defaultdict(int)
+    for user, b, d in logons:
+        baseline[(user, b, str(d.get("logon_type") or "").lower(), str(d.get("source_ip") or ""))] += 1
+    for user, b, d in logons:
         ip = d.get("source_ip")
         if not ip or ip in ctx.scanner_ips or ip in ctx.vpn_ips or ip in ctx.nat_ips:
             continue
         when = parse_time(d.get("logon_time")) or parse_time(d.get("first_seen"))
         if when is None:
             continue
+        routine = baseline[(user, b, str(d.get("logon_type") or "").lower(), str(ip))] >= ROUTINE_LOGON_MIN
         for a in endpoints_at(str(ip)):
             if a == b:
                 continue
@@ -90,6 +118,8 @@ def derive_lateral_movement(ctx: AnalyticsContext) -> dict[str, int]:
                 if t is not None and when <= t <= when + timedelta(hours=LM_FOLLOW_HOURS):
                     follow = cand
                     break
+            if routine and not follow:
+                continue
             protocol = LOGON_PROTOCOL.get(str(d.get("logon_type") or "").lower(), str(d.get("logon_type") or "network").lower())
             add(a, b, protocol, ctx.short(user), when, follow or trigger)
     # rule 2: an SSH/RDP alert on B naming A's ip as source
