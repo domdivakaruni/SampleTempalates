@@ -101,7 +101,8 @@ class _Messages:
         self._beta = beta
 
     def stream(self, **kwargs: Any) -> FakeStreamManager:
-        self._client.requests.append({"beta": self._beta, **kwargs})
+        # snapshot: the loop keeps appending to the live ``messages`` list after the request was issued
+        self._client.requests.append({"beta": self._beta, **kwargs, "messages": list(kwargs.get("messages") or [])})
         if not self._client.script:
             raise AssertionError("fake client script exhausted: the loop asked for one more model round than scripted")
         turn = self._client.script.pop(0)

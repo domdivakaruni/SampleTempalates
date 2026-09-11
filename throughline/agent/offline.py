@@ -103,7 +103,7 @@ _RULES: list[tuple[str, list[tuple[str, float]]]] = [
         (r"\bendpoint alerts?\b", 2), (r"\bsit on assets\b", 2), (r"\bregulated data\b", 1),
     ]),
     ("is_alert_actually_risky", [
-        (r"\bactually (risky|dangerous|a problem|matter|bad)\b", 5), (r"\bfalse positive\b|\bnoise\b|\bbenign\b", 3),
+        (r"\bactually (risky|dangerous|a problem|matter|bad|real)\b", 5), (r"\bfalse positive\b|\bnoise\b|\bbenign\b", 4), (r"\bis (this|that|the|it)\b.*\b(real|legit|legitimate|a concern|worth)\b", 3),
         (r"\bis (this|that|the|it) .*\brisky\b", 3), (r"\bshould (i|we) (care|worry|escalate)\b", 3), (r"what'?s in it", 2),
         (r"\bfinding\b", 1), (r"\bcan an actor reach it\b", 2),
     ]),
@@ -119,8 +119,8 @@ _RULES: list[tuple[str, list[tuple[str, float]]]] = [
         (r"\bhow many (storylines|incidents)\b", 3),
     ]),
     ("alerts_on_entity", [
-        (r"\balerts?\b.*\b(on|for|against|affecting|hitting|involving)\b", 3), (r"\b(which|what|any|list|show|how many)\b.*\b(alerts?|detections?|findings?)\b", 2),
-        (r"\b(detections?|findings?)\b.*\b(on|for|against)\b", 2), (r"\bsit(s|ting)? on\b", 1), (r"\balerts? (are )?(there )?(on|for)\b", 2),
+        (r"\balerts?\b.*\b(on|against|affecting|hitting|involving)\b", 3), (r"\b(which|what|any|list|show|how many)\b.*\b(alerts?|detections?|findings?)\b", 2),
+        (r"\b(detections?|findings?)\b.*\b(on|against)\b", 2), (r"\bsit(s|ting)? on\b", 1), (r"\balerts? (are )?(there )?on\b", 2),
     ]),
     ("neighborhood_of_entity", [
         (r"\bneighbou?rhood\b", 4), (r"\b(what is|what'?s|show( me)?( what is)?) connected to\b", 3), (r"\bexpand\b", 2), (r"\bconnections? (of|to|from)\b", 2),
@@ -443,10 +443,10 @@ class _Run:
         if not phrase:
             return None
         words = _notable_words(phrase)
-        data = self.result("list_alerts", q=phrase, sort="contextual", limit=5)
+        data = self.result("list_alerts", q=phrase, sort="time", limit=25)
         items = [a for a in data.get("items") or [] if isinstance(a, Mapping)]
         if items:
-            return dict(items[0])
+            return self._latest_of(items)
         hits = self.search_all(" ".join(words) or phrase, ["Alert"], limit=8)
         if not hits:
             return None
@@ -456,7 +456,22 @@ class _Run:
         overlap, _score, best = scored[0]
         if overlap < need:
             return None
-        return {"id": best["id"], "title": best.get("name"), "label": best.get("label")}
+        # the same finding usually exists on several assets ("S3 bucket allows public read" x5): "the finding" is the
+        # most recent one; the others are reported as siblings so the analyst can pivot
+        title = str(best.get("name") or "")
+        if title:
+            data = self.result("list_alerts", q=title, sort="time", limit=25)
+            same = [a for a in data.get("items") or [] if isinstance(a, Mapping) and str(a.get("title") or "").lower() == title.lower()]
+            if same:
+                return self._latest_of(same)
+        return {"id": best["id"], "title": best.get("name"), "label": best.get("label"), "siblings": []}
+
+    @staticmethod
+    def _latest_of(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+        ordered = sorted(items, key=lambda a: (str(a.get("detected_at") or ""), int(a.get("contextual_score") or 0)), reverse=True)
+        top = dict(ordered[0])
+        top["siblings"] = [dict(a) for a in ordered[1:]]
+        return top
 
 
 # ----------------------------------------------------------------------------- the analyst
@@ -787,7 +802,7 @@ class OfflineAnalyst:
             if hit:
                 full = run.result("get_alert", alert_id=hit["id"])
                 if full.get("alert"):
-                    return dict(full)
+                    return {**full, "siblings": hit.get("siblings") or []}
         return None
 
     @staticmethod
@@ -1287,6 +1302,7 @@ class OfflineAnalyst:
                 if hit:
                     alert_data = run.result("get_alert", alert_id=hit["id"])
                     if alert_data.get("alert"):
+                        alert_data = {**alert_data, "siblings": hit.get("siblings") or []}
                         break
                     alert_data = None
         if not alert_data:
@@ -1314,6 +1330,15 @@ class OfflineAnalyst:
         rails = risk.get("rails") or []
         if rails:
             draft.findings.append(Finding(statement=f"Rails applied: {', '.join(rails)}" + (" - capped as noise because there is no data, no threat-intel relevance and no privilege behind the exposure." if any('ceiling' in r for r in rails) else "."), evidence_ids=[alert["id"]]))
+        siblings = [s for s in alert_data.get("siblings") or [] if isinstance(s, Mapping) and s.get("id")]
+        if siblings:
+            draft.findings.append(Finding(
+                statement=f"{len(siblings)} other finding(s) carry the same title; this answer covers the most recent one. The others: "
+                + ", ".join(f"{_b(s['id'])} on {s.get('entity_name') or s.get('hostname') or s.get('entity_id')} (score {s.get('contextual_score')})" for s in siblings[:5])
+                + (" ..." if len(siblings) > 5 else "") + " - the contextual score separates the ones that matter.",
+                severity="medium" if any(int(s.get("contextual_score") or 0) > 25 for s in siblings) else "low",
+                evidence_ids=[s["id"] for s in siblings[:5]],
+            ))
         insights = alert_data.get("insights") or []
         draft.evidence_lines = ["- Flat view: " + "; ".join(f"{k}={v}" for k, v in list((alert_data.get("flat_view") or {}).items())[:6])] + [f"- Insight: {i.get('statement')}" for i in insights[:4]]
         draft.impact_lines = [

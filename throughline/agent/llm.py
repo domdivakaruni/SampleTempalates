@@ -349,6 +349,7 @@ class LLMAnalyst:
     def _execute_tools(self, blocks: list[Any], turn: _Turn, emit: EventSink) -> tuple[list[dict[str, Any]], AnalystAnswer | None]:
         submit: tuple[Any, dict[str, Any]] | None = None
         jobs: list[tuple[Any, dict[str, Any]]] = []
+        over_budget: dict[str, dict[str, Any]] = {}
         results_by_id: dict[str, dict[str, Any]] = {}
         for block in blocks:
             arguments = _block_input(block)
@@ -357,17 +358,23 @@ class LLMAnalyst:
                 submit = (block, arguments)
                 continue
             if turn.tool_calls_used >= self.max_tool_calls:
-                results_by_id[block.id] = self._record(block, arguments, None, BUDGET_NOTE, 0, turn, emit)
+                over_budget[block.id] = arguments
                 continue
             turn.tool_calls_used += 1
             jobs.append((block, arguments))
-        if len(jobs) > 1:
+        if len(jobs) > 1:  # independent lookups run in parallel; results are still recorded in block order
             with ThreadPoolExecutor(max_workers=min(len(jobs), self.tool_workers)) as pool:
                 outcomes = list(pool.map(lambda job: self._invoke(job[0].name, job[1]), jobs))
         else:
             outcomes = [self._invoke(block.name, arguments) for block, arguments in jobs]
-        for (block, arguments), (res, error, ms) in zip(jobs, outcomes, strict=True):
-            results_by_id[block.id] = self._record(block, arguments, res, error, ms, turn, emit)
+        outcome_by_id = {block.id: (arguments, outcome) for (block, arguments), outcome in zip(jobs, outcomes, strict=True)}
+        for block in blocks:
+            block_id = getattr(block, "id", None)
+            if block_id in outcome_by_id:
+                arguments, (res, error, ms) = outcome_by_id[block_id]
+                results_by_id[block_id] = self._record(block, arguments, res, error, ms, turn, emit)
+            elif block_id in over_budget:
+                results_by_id[block_id] = self._record(block, over_budget[block_id], None, BUDGET_NOTE, 0, turn, emit)
         answer: AnalystAnswer | None = None
         if submit is not None:
             block, arguments = submit

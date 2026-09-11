@@ -936,7 +936,8 @@ class ToolRegistry:
         frag = frag.model_copy(update={"focus": list(dict.fromkeys([*a.target_ids, *frag.focus]))})
         result = sim.model_dump(mode="json", exclude={"fragment"})
         summary = f"containment of {len(a.target_ids)} target(s) with {a.actions}: {sim.paths_cut} path(s) cut, {len(sim.storylines_contained)} storyline(s) contained, {len(sim.crown_jewels_protected)} crown jewel(s) protected, {len(sim.breaks)} thing(s) break"
-        return ToolResult(result=result, evidence=frag, summary=summary, result_ids=[b.node_id for b in sim.breaks])
+        citable = [*sim.target_ids, *sim.storylines_contained, *sim.crown_jewels_protected, *(b.node_id for b in sim.breaks), *(b.owner_team_id for b in sim.breaks if b.owner_team_id)]
+        return ToolResult(result=result, evidence=frag, summary=summary, result_ids=list(dict.fromkeys(citable)))
 
     def _store_capabilities(self) -> dict[str, Any]:
         try:
