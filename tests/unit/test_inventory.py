@@ -7,6 +7,7 @@ from __future__ import annotations
 import filecmp
 import json
 import time
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -269,7 +270,8 @@ def test_cspm_issue_n002(generated: dict) -> None:
     assert len({a["props"]["title"] for a in alerts}) >= 25
     toxic = [a for a in alerts if a["props"]["title"].startswith("Toxic combination")]
     assert any(e["dst"] == sc.EDGE_VM for a in toxic for e in _edges(generated, "ON_RESOURCE", src=a["id"]))
-    assert all(len(_edges(generated, "ON_RESOURCE", src=a["id"])) == 1 for a in alerts)
+    on_resource = Counter(e["src"] for e in generated["edges"] if e["type"] == "ON_RESOURCE")
+    assert all(on_resource[a["id"]] == 1 for a in alerts)
 
 
 # ---------------------------------------------------------------------------- endpoints and people
