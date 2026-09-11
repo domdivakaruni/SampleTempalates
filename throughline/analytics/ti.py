@@ -234,8 +234,8 @@ def campaign_techniques(ctx: AnalyticsContext, who: str) -> set[str]:
     return out
 
 
-def attribute_alerts(ctx: AnalyticsContext, min_ttp_ratio: float = 0.5, min_ttp_overlap: int = 2) -> dict[str, int]:
-    """ATTRIBUTED_TO edges from alerts to campaigns and actors (IOC match, or TTP overlap >= 0.5 with >= 2 techniques)."""
+def attribute_alerts(ctx: AnalyticsContext, min_ttp_ratio: float = 0.5, min_ttp_overlap: int = 3) -> dict[str, int]:
+    """ATTRIBUTED_TO edges from alerts to campaigns and actors (IOC match, or TTP overlap >= 0.5 covering >= 3 techniques)."""
     g = ctx.graph
     campaigns = list(g.nodes_by_label("Campaign"))
     ttps = {c: campaign_techniques(ctx, c) for c in campaigns}
@@ -818,12 +818,18 @@ def ti_exposure(ctx: AnalyticsContext, sector_only: bool = True, score_asset: Ca
         campaigns = sorted({c for c, _ in g.in_edges(cve, ("EXPLOITS",)) if g.label_of(c) == "Campaign"})
         ep = ctx.endpoint_for(vm)
         alert_ids = sorted(set(ctx.alerts_on(vm)) | (set(ctx.alerts_on(ep)) if ep else set()))
-        best_alert = None
+        best_alert: tuple[int, str] | None = None
         if alert_score:
-            scored = [(alert_score(a), a) for a in alert_ids]
-            scored = [(s, a) for s, a in scored if s is not None]
+            scored = []
+            for a in alert_ids:
+                val = alert_score(a)
+                if val is None:
+                    continue
+                tup = tuple(val) if isinstance(val, tuple | list) else (int(val), 0.0)
+                scored.append((tup, a))
             if scored:
-                best_alert = max(scored)
+                best_tup, best_id = max(scored, key=lambda x: (x[0], x[1] < "alert:waf"))
+                best_alert = (int(best_tup[0]), best_id)
         host_score = score_asset(vm) if score_asset else 0
         score = max(host_score, best_alert[0] if best_alert else 0)
         crown = ctx.reaches_crown_jewel(vm, 4, "access")

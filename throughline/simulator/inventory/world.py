@@ -235,7 +235,7 @@ def _emit_users(inv: Inventory, world: World, r) -> None:  # type: ignore[no-unt
         lead = world.leads[p.team.slug]
         manager_id = lead.id if lead is not p else None
         hire = days_ago(r, 60, 2400)
-        last_login = minutes_ago(r, 5, 3 * 1440) if p.status == "active" else days_ago(r, 20, 200)
+        last_login = max(minutes_ago(r, 5, 3 * 1440) if p.status == "active" else days_ago(r, 20, 200), hire)
         inv.add_node(
             p.id, "HumanUser", p.display_name,
             {

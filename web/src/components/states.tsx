@@ -41,7 +41,7 @@ export function SkeletonRows({ rows = 6, cols = 5 }: { rows?: number; cols?: num
       {Array.from({ length: rows }).map((_, r) => (
         <div key={r} className="flex gap-3">
           {Array.from({ length: cols }).map((_, c) => (
-            <Skeleton key={c} className="h-4 flex-1" style-hint={c} />
+            <Skeleton key={c} className="h-4 flex-1" />
           ))}
         </div>
       ))}

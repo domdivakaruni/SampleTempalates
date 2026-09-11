@@ -459,9 +459,12 @@ def _service_roles(b: IamBuilder, apps: list[AppSpec]) -> None:
             name = f"Larkspur{camel(service)}{suffix}Role"
             rid = b.role(acct_key, name, "instance", ["ec2.amazonaws.com"], description=f"Instance profile for {service} ({environment}).", app=app_slug, env=environment)
             b.attach(rid, b.managed(acct_key, "AmazonSSMManagedInstanceCore"))
-            if r.random() < 0.6:
-                b.attach(rid, b.managed(acct_key, "CloudWatchAgentServerPolicy"))
-            pid = b.policy(acct_key, f"Larkspur{camel(service)}{suffix}Access", [], ["read"], description=f"Access policy for {service}")
+            if service.startswith(("mon-collector-", "jump-", "backup-agent-", "nat-", "dns-forwarder-")):
+                pid = ""
+            else:
+                if r.random() < 0.6:
+                    b.attach(rid, b.managed(acct_key, "CloudWatchAgentServerPolicy"))
+                pid = b.policy(acct_key, f"Larkspur{camel(service)}{suffix}Access", [], ["read"], description=f"Access policy for {service}")
         elif provider == "gcp":
             name = f"{service}-sa"
             rid = b.role(acct_key, name, "instance", ["compute.googleapis.com"], description=f"GCE service account for {service}.", app=app_slug, env=environment)
@@ -470,6 +473,15 @@ def _service_roles(b: IamBuilder, apps: list[AppSpec]) -> None:
             name = f"mi-{service}"
             rid = b.role(acct_key, name, "instance", ["Microsoft.Compute/virtualMachines"], description=f"User-assigned managed identity for {service}.", app=app_slug, env=environment)
             pid = b.policy(acct_key, f"ra-{service}", [], ["read"], description=f"Role assignments for {service}")
+        utility = service.startswith(("mon-collector-", "jump-", "backup-agent-", "nat-", "dns-forwarder-"))
+        if utility and provider == "aws":
+            # utility hosts only need the managed SSM/CloudWatch policies
+            if r.random() < 0.5:
+                b.attach(rid, b.managed(acct_key, "CloudWatchAgentServerPolicy"))
+            for vm in vms:
+                inv.add_edge("HAS_ROLE", vm, rid, {"via": "instance_profile"}, source=SOURCE_WIZ)
+            b.ident.role_by_key[key] = rid
+            continue
         strength = 1.0 if environment in ("prod", "corp") else 0.7
         statements = _generic_grants(b, pid, app, environment, acct_key, r, strength=strength)
         inv.props(pid)["statements"] = statements
@@ -529,9 +541,10 @@ def _function_roles(b: IamBuilder, apps: list[AppSpec]) -> None:
         b.attach(rid, b.managed(acct_key, "AWSLambdaBasicExecutionRole"))
         if r.random() < 0.4:
             b.attach(rid, b.managed(acct_key, "AWSLambdaVPCAccessExecutionRole"))
-        pid = b.policy(acct_key, f"Larkspur{camel(app_slug)}Lambda{acct_suffix}{suffix}Access", [], ["read"], description=f"Data access for {app.name} functions")
-        inv.props(pid)["statements"] = _generic_grants(b, pid, app, environment, acct_key, r, strength=0.8)
-        b.attach(rid, pid)
+        if r.random() < 0.7:
+            pid = b.policy(acct_key, f"Larkspur{camel(app_slug)}Lambda{acct_suffix}{suffix}Access", [], ["read"], description=f"Data access for {app.name} functions")
+            inv.props(pid)["statements"] = _generic_grants(b, pid, app, environment, acct_key, r, strength=0.8)
+            b.attach(rid, pid)
         for fid in fids:
             inv.add_edge("HAS_ROLE", fid, rid, {"via": "service_account"}, source=SOURCE_WIZ)
 
@@ -561,11 +574,10 @@ def _sso_roles(b: IamBuilder, world: World) -> None:
             group = "security-eng" if pset == "SecurityAudit" else SSO_GROUP_FOR_ACCOUNT[acct_key][pset]
             gid = world.groups[group]
             inv.add_edge("MAPS_TO", gid, rid, {"via": "sso"}, source=SOURCE_OKTA)
-            # privileged individuals also get a direct mapping so their footprint is queryable
-            if pset in ("AdministratorAccess", "PowerUserAccess") or acct_key == "prod":
+            # privileged individuals in admin/power sets also get a direct mapping so their footprint is queryable
+            if pset in ("AdministratorAccess", "PowerUserAccess"):
                 for uid in world.group_members.get(group, []):
-                    p = world.person(uid)
-                    if p.privileged or pset == "ReadOnlyAccess" and acct_key == "prod":
+                    if world.person(uid).privileged:
                         inv.add_edge("MAPS_TO", uid, rid, {"via": "sso", "group": group}, source=SOURCE_OKTA)
     # data analysts: a custom permission set in the data account
     analyst = b.role("data", f"AWSReservedSSO_LarkspurDataAnalyst_{hexid('pset', 'data', 'analyst', length=16)}", "sso", [f"arn:aws:iam::555555555555:saml-provider/AWSSSO_{hexid('saml', 'data', length=10)}_DO_NOT_DELETE"], description="IAM Identity Center permission set LarkspurDataAnalyst", path="/aws-reserved/sso.amazonaws.com/")
@@ -605,8 +617,8 @@ def _cross_account_roles(b: IamBuilder) -> None:
         tf_level = "PowerUserAccess" if acct_key == "prod" else "AdministratorAccess"
         tf = b.role(acct_key, "LarkspurTerraformRole", "cross-account", [], description=f"Terraform apply role ({tf_level}).", is_admin=tf_level == "AdministratorAccess")
         b.attach(tf, b.managed(acct_key, tf_level))
-        if ci_runner:
-            b.can_assume(ci_runner, tf)
+        if ci_runner and acct_key in ("shared", "staging", "dev"):
+            b.can_assume(ci_runner, tf)  # prod/data/corp applies run from a separate approval workflow
         if inv.has(terraform_user):
             b.can_assume(terraform_user, tf)
     # deploy chain dev -> staging -> prod

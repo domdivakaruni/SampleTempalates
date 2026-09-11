@@ -519,7 +519,8 @@ def emit_business_edges(inv: Inventory, apps: list[AppSpec]) -> None:
                 if kind in ("vm", "bucket", "database"):
                     inv.add_edge("OWNED_BY", rid, team_id, source=SOURCE_WIZ)
         for did in a.resources.get("database", []):
-            inv.add_edge("DEPENDS_ON", a.id, did, {"dependency_type": "database"}, source=SOURCE_WIZ)
+            if inv.props(did)["environment"] == a.environment:
+                inv.add_edge("DEPENDS_ON", a.id, did, {"dependency_type": "database"}, source=SOURCE_WIZ)
         for bid in a.resources.get("bucket", []):
             p = inv.props(bid)
             if p.get("crown_jewel") or "SECRETS" in p.get("data_classifications", []):

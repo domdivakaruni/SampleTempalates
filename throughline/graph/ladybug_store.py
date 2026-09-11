@@ -11,7 +11,10 @@ visible differences are handled in one place each:
 * node/relationship values carry ``_ID/_LABEL/_SRC/_DST`` keys on Ladybug and ``_id/_label/_src/_dst`` on Kuzu;
 * Ladybug accepts multi-label patterns ``(n:A|B)``, Kuzu does not (``capabilities()["multi_label_patterns"]``);
   internal queries only ever use label-less patterns with ``label(n) IN [...]`` so they run on both;
-* the reserved word ``Group`` (our label) must be backtick-quoted in DDL and patterns on both engines.
+* the reserved word ``Group`` (our label) must be backtick-quoted in DDL and patterns on both engines;
+* Kuzu 0.11.3 mis-evaluates ``WHERE n.id IN $ids`` inside label-less multi-table scans (rows dropped, and long
+  strings read from the wrong overflow buffer), so internal lookups use ``UNWIND $ids AS i MATCH (n {id: i})``
+  primary-key lookups instead; user Cypher is passed through unchanged.
 
 Build
 -----
@@ -529,9 +532,11 @@ class LadybugStore(BaseStore):
             by_label[label if label in LABELS else None].append(nid)
         found: dict[str, dict[str, Any]] = {}
         for label, group in by_label.items():
-            pattern = f"(n:{ident(label)})" if label else "(n)"
+            # UNWIND + primary-key lookup rather than `WHERE n.id IN $ids`: Kuzu 0.11.3 mis-evaluates IN-list
+            # predicates on long strings inside label-less multi-table scans (see the module docstring).
+            pattern = f"(n:{ident(label)} {{id: i}})" if label else "(n {id: i})"
             for start in range(0, len(group), 500):
-                _, _, rows = self._execute(f"MATCH {pattern} WHERE n.id IN $ids RETURN n", {"ids": group[start : start + 500]})
+                _, _, rows = self._execute(f"UNWIND $ids AS i MATCH {pattern} RETURN n", {"ids": group[start : start + 500]})
                 for (d,) in rows:
                     rec = self._node_record(d)
                     found[rec["id"]] = rec
@@ -558,13 +563,18 @@ class LadybugStore(BaseStore):
     # ------------------------------------------------------------------ neighborhood
 
     def _edges_among(self, ids: Sequence[str]) -> list[dict[str, Any]]:
+        """All edges whose endpoints are both in ``ids``: primary-key lookups of the sources' out-edges, endpoint
+        filter in Python (a label-less double ``IN`` scan silently drops rows on Kuzu 0.11.3)."""
         if len(ids) < 2:
             return []
-        _, _, rows = self._execute(
-            "MATCH (a)-[e]->(b) WHERE a.id IN $ids AND b.id IN $ids RETURN a.id, b.id, e", {"ids": list(ids)}
-        )
+        idset = set(ids)
+        records: list[dict[str, Any]] = []
+        for start in range(0, len(ids), 200):
+            _, _, rows = self._execute(
+                "UNWIND $ids AS i MATCH (a {id: i})-[e]->(b) RETURN a.id, b.id, e", {"ids": list(ids[start : start + 200])}
+            )
+            records.extend(self._edge_record(src, dst, e) for src, dst, e in rows if dst in idset)
         position = {nid: i for i, nid in enumerate(ids)}
-        records = [self._edge_record(src, dst, e) for src, dst, e in rows]
         records.sort(key=lambda r: (position[r["src"]], r["type"], position[r["dst"]]))
         return records
 
@@ -574,17 +584,21 @@ class LadybugStore(BaseStore):
         ``SHORTEST`` recursive patterns and LadybugDB applies them to the start node as well, so the single-query
         form cannot express "expand only through these labels" portably."""
         left, right = ARROWS[direction]
-        where = ["n.id IN $ids"]
+        where: list[str] = []
         if types:
             where.append("label(e) IN [" + ", ".join(lit(t) for t in types) + "]")
         if wanted:
             where.append("label(m) IN [" + ", ".join(lit(lbl) for lbl in wanted) + "]")
-        query = f"MATCH (n){left}[e]{right}(m) WHERE {' AND '.join(where)} RETURN DISTINCT m.id"
+        where_clause = f" WHERE {' AND '.join(where)}" if where else ""
+        query = f"UNWIND $ids AS i MATCH (n {{id: i}}){left}[e]{right}(m){where_clause} RETURN DISTINCT m.id"
         hops = {node_id: 0}
         frontier = [node_id]
         for hop in range(1, depth + 1):
-            _, _, rows = self._execute(query, {"ids": frontier})
-            frontier = sorted({m for (m,) in rows if m not in hops})
+            found: set[str] = set()
+            for start in range(0, len(frontier), 500):
+                _, _, rows = self._execute(query, {"ids": frontier[start : start + 500]})
+                found.update(m for (m,) in rows)
+            frontier = sorted(m for m in found if m not in hops)
             for m in frontier:
                 hops[m] = hop
             if not frontier:

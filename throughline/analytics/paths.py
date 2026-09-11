@@ -238,8 +238,10 @@ def storyline_members_on(ctx: AnalyticsContext, node_id: str, storyline_id: str 
     for a in ctx.alerts_on(node_id):
         alerts.append(a)
     if label in ("IamRole", "IamUser"):
+        # AssumeRole events belong to the role that was assumed, not to the performer
         for ev, _ in g.in_edges(node_id, ("PERFORMED_BY",)):
-            events.append(ev)
+            if not g.out_edges(ev, ("ASSUMED",)):
+                events.append(ev)
         for ev, _ in g.in_edges(node_id, ("ASSUMED",)):
             events.append(ev)
     if label in sem.DATA_HOLDER_LABELS:
@@ -303,7 +305,8 @@ def build_stages(ctx: AnalyticsContext, path: list[str], storyline_id: str | Non
         elif etype == "EXPOSES":
             techniques.insert(0, "T1190" if ctx.sem.asset_exploitable(nid) else "T1133")
         techniques = list(dict.fromkeys(techniques))
-        stage_no = _stage_for_node(ctx, nid, etype, techniques, alerts, i == 0)
+        prev_stage = stages[-1].stage if stages else None
+        stage_no = _stage_for_node(ctx, nid, etype, techniques, alerts, i == 0, events=events, prev_stage=prev_stage)
         stages.append(StageOut(
             order=i + 1, stage=sem.stage_label(stage_no), technique_ids=techniques, node_ids=[nid], edge_ids=[],
             alert_ids=alerts + events, time=min(times) if times else None, summary=_stage_summary(ctx, nid, etype, alerts, events, edata),
@@ -313,30 +316,45 @@ def build_stages(ctx: AnalyticsContext, path: list[str], storyline_id: str | Non
 
 
 def _stage_for_node(ctx: AnalyticsContext, nid: str, etype: str | None, techniques: list[str] | None = None,
-                    alerts: list[str] | None = None, first: bool = False) -> int:
+                    alerts: list[str] | None = None, first: bool = False, events: list[str] | None = None,
+                    prev_stage: str | None = None) -> int:
+    """Kill-chain stage of a path node, driven by how the attacker got there (the transition), then by what was
+    observed there (alerts on an anchor host, cloud events on a role or data store)."""
     g = ctx.graph
     label = g.label_of(nid)
     if label == "Alert":
         return sem.alert_stage(g.node(nid)) or 1
-    if nid == sem.INTERNET_ID:
-        return 1
-    if etype == "EXPOSES":
+    if nid == sem.INTERNET_ID or etype == "EXPOSES":
         return 1
     if etype == "LATERAL_MOVEMENT_TO":
         return 5
-    if alerts:
-        stages = [sem.alert_stage(g.node(a)) for a in alerts if g.label_of(a) == "Alert"]
-        stages = [s for s in stages if s]
-        if stages:
-            return max(stages)
+    if etype in ("CAN_ASSUME", "MAPS_TO", "DERIVED_FROM"):
+        return 5
+    if label in sem.DATA_HOLDER_LABELS:
+        covered: set[int] = set()
+        for e in events or []:
+            covered |= sem.stages_covered(sem.event_techniques(g.node(e)))
+        return max(covered) if covered else 6
+    if etype in ("HAS_ROLE", "CREDENTIAL_FOR", "HAS_ACCESS_KEY") or label in ("IamRole", "IamUser", "Credential", "AccessKey"):
+        covered: set[int] = set()
+        for e in events or []:
+            covered |= sem.stages_covered(sem.event_techniques(g.node(e)))
+        return max(covered) if covered else 4
+    real_alerts = [a for a in (alerts or []) if g.label_of(a) == "Alert"]
+    if real_alerts:
+        # the stage the attacker had reached when leaving this host: its latest alert
+        latest = max(real_alerts, key=lambda a: (str(g.get(a, "detected_at") or ""), a))
+        st = sem.alert_stage(g.node(latest))
+        if st:
+            return st
+    if etype == "SAME_AS" and prev_stage:
+        for number, name in sem.KILL_CHAIN_STAGES.items():
+            if name == prev_stage:
+                return number
     if techniques:
         covered = sem.stages_covered(techniques)
         if covered:
             return max(covered)
-    if label in sem.DATA_HOLDER_LABELS:
-        return 6
-    if label in ("IamRole", "IamUser", "Credential", "AccessKey"):
-        return 5
     if etype:
         return sem.stage_for_edge(etype)
     return 1 if first else 2

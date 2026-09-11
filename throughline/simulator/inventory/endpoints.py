@@ -131,7 +131,8 @@ def _servers(inv: Inventory, est: Estate) -> None:
             octets = private_ip.split(".")
             private_ip = ".".join(octets[:3] + [str((int(octets[3]) + 37) % 200 + 20)])
         stale = r.random() < 0.03
-        last_seen = days_ago(r, 3, 20) if stale else minutes_ago(r, 1, 90)
+        first_seen = inv.nodes[vm]["first_seen"]
+        last_seen = max(days_ago(r, 3, 20) if stale else minutes_ago(r, 1, 90), first_seen)
         if vm == sc.BASTION_VM:
             last_seen = "2026-09-11T13:58:12Z"
         windows = p["os_family"] == "windows"
@@ -147,7 +148,7 @@ def _servers(inv: Inventory, est: Estate) -> None:
                 "prevention_policy": "Servers - Balanced" if not p["is_k8s_node"] else "Kubernetes Nodes", "resolution_method": method,
                 "tags": [f"FalconGroupingTags/{'K8sNodes' if p['is_k8s_node'] else 'Servers'}", f"FalconGroupingTags/{p['environment']}", f"FalconGroupingTags/{provider.upper()}-{p['account_id'][:12]}"],
             },
-            source=SOURCE_FALCON, source_id=aid, first_seen=inv.nodes[vm]["first_seen"], last_seen=last_seen, kind="endpoint", vm_id=vm, method=method,
+            source=SOURCE_FALCON, source_id=aid, first_seen=first_seen, last_seen=last_seen, kind="endpoint", vm_id=vm, method=method,
         )
         edge_props = {"method": method, "confidence": confidence}
         if method == "hostname_only":
@@ -155,7 +156,7 @@ def _servers(inv: Inventory, est: Estate) -> None:
             edge_props["reason"] = "hostname match only; sensor IP differs from cloud inventory"
         elif method == "hostname_ip":
             edge_props["reason"] = "sensor lacks cloud metadata; hostname and private IP match"
-        inv.add_edge("SAME_AS", eid, vm, edge_props, source=SOURCE_DERIVED, confidence=confidence, first_seen=inv.nodes[vm]["first_seen"])
+        inv.add_edge("SAME_AS", eid, vm, edge_props, source=SOURCE_DERIVED, confidence=confidence, first_seen=first_seen)
         meta["endpoint_id"] = eid
 
 

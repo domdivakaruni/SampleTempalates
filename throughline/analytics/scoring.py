@@ -130,7 +130,9 @@ class Scorer:
                 if pivot:
                     final += float(r["credential_pivot_bonus"])
                     rails.append(f"credential_pivot_bonus:+{r['credential_pivot_bonus']}")
-            elif exploited_sector:
+            elif exploited_sector and str(attrs.get("alert_type") or "detection") != "issue":
+                # activity on an internet-exposed asset under active exploitation by a sector-targeting actor;
+                # posture issues on such hosts are ranked by their real reach (and carry ti_exposure_score)
                 final = max(final, float(r["ti_booster_floor"]))
                 rails.append(f"ti_booster_floor:{r['ti_booster_floor']}")
                 floored = True

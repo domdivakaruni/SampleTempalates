@@ -114,8 +114,10 @@ def test_build_20k_nodes_within_budget(tmp_path: Path) -> None:
     elapsed = time.perf_counter() - t0
     store.open()
     stats = store.stats()
-    assert stats.total_nodes == n_nodes and stats.total_edges == n_edges
-    assert set(store.stored_manifest()["load_method"].values()) == {"copy"}
+    sidecar = store.stored_manifest()
+    assert stats.total_nodes == n_nodes
+    assert stats.total_edges == n_edges - sidecar["duplicate_edges"]  # same-type parallel edges collapse (first wins)
+    assert set(sidecar["load_method"].values()) == {"copy"}
     fragment = store.neighborhood("vm:aws:i-0000000000000000", depth=2)
     assert fragment.nodes[0].id == "vm:aws:i-0000000000000000" and len(fragment.nodes) > 1
     result = store.run_readonly_cypher("MATCH (a:Alert)-[:ON_ENDPOINT]->(e:Endpoint)-[:SAME_AS]->(v:VirtualMachine)-[:HAS_ROLE]->(r:IamRole)-[:CAN_ACCESS]->(b:StorageBucket) WHERE b.crown_jewel RETURN a.id, b.name LIMIT 20")

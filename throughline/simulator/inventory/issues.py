@@ -299,7 +299,7 @@ def _emit(inv: Inventory, s: IssueSink) -> int:
             "severity": severity.upper(),
             "status": "OPEN" if status == "new" else "IN_PROGRESS",
             "createdAt": detected,
-            "updatedAt": ts(parse_ts(detected) + timedelta(hours=rr.randint(1, 72))),
+            "updatedAt": ts(min(parse_ts(detected) + timedelta(hours=rr.randint(1, 72)), NOW - timedelta(minutes=5))),
             "dueAt": ts(parse_ts(detected) + timedelta(days={"critical": 7, "high": 14, "medium": 30, "low": 90, "informational": 180}[severity])),
             "sourceRule": {"id": issue["control"], "name": issue["title"], "controlDescription": issue["description"]},
             "entitySnapshot": {

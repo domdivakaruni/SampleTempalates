@@ -449,7 +449,7 @@ def _place_app(inv: Inventory, est: Estate, app: AppSpec, acct_key: str, env: st
 
 
 def _vm_props_common(r: random.Random, acct_key: str, vpc: VpcSpec) -> dict[str, Any]:
-    return {"launch_time": days_ago(r, 5, 700), "ami_age_days": r.randint(5, 420), "imdsv2_required": r.random() < 0.7, "ebs_encrypted": r.random() < 0.85}
+    return {"launch_time": days_ago(r, 5, 700), "ami_age_days": r.randint(5, 420), "imdsv2_required": r.random() < 0.88, "ebs_encrypted": r.random() < 0.87}
 
 
 def _vm_service(inv: Inventory, est: Estate, app: AppSpec, svc: Svc, acct_key: str, env: str, environment: str, vpc_name: str, suffix: str, count: int, r: random.Random) -> None:
@@ -553,14 +553,16 @@ def _vm_service(inv: Inventory, est: Estate, app: AppSpec, svc: Svc, acct_key: s
             inv.meta[vm_id]["lb_ports"] = [svc.port] if scheme == "internet-facing" else []
             inv.meta[vm_id]["lb_id"] = lb_id
     # a container image for the service, run by all its VMs (application stacks only)
-    if svc.stack in ("java", "node", "python", "go") and svc.name not in ("log4j-testbed",) and r.random() < 0.75:
+    if svc.stack in ("java", "node", "python", "go") and svc.name not in ("log4j-testbed",) and (svc.name == "stmt-render" or r.random() < 0.75):
         tag = _service_version(app, svc, env)
         image_id = _image(inv, est, "ecr", f"larkspur/{svc.name}", tag, stack=svc.stack, app=app.slug)
-        if svc.name == "stmt-render":
-            image_id = _image(inv, est, "ecr", "larkspur/statement-render", "3.8.1", stack="java", app=app.slug)
         for vm_id in ids:
-            inv.add_edge("RUNS_IMAGE", vm_id, image_id, source=SOURCE_WIZ)
-            inv.meta[vm_id]["image"] = image_id
+            run_image = image_id
+            if svc.name == "stmt-render":
+                tag = "3.8.2" if inv.name(vm_id) == "stmt-render-1a" else "3.8.1"
+                run_image = _image(inv, est, "ecr", "larkspur/statement-render", tag, stack="java", app=app.slug)
+            inv.add_edge("RUNS_IMAGE", vm_id, run_image, source=SOURCE_WIZ)
+            inv.meta[vm_id]["image"] = run_image
 
 
 def _service_public_sg(inv: Inventory, est: Estate, vpc: VpcSpec, svc: Svc, r: random.Random) -> str:
@@ -866,7 +868,7 @@ def _registry_tail(inv: Inventory, est: Estate) -> None:
     r = rng("inventory.cloud.registry")
     repos = sorted({(m["repository"], m["stack"], m["app"]) for m in est.images.values() if m["registry"] == "ecr"})
     for repository, stack, app in repos:
-        for k in range(r.choice([1, 1, 2, 2, 3, 4])):
+        for k in range(r.choice([0, 1, 1, 2, 2, 3])):
             major = 1 + int(hexid("oldver", repository, k, length=2), 16) % 4
             tag = f"{major}.{int(hexid('oldminor', repository, k, length=2), 16) % 20}.{k}"
             _image(inv, est, "ecr", repository, tag, stack=stack, app=app)

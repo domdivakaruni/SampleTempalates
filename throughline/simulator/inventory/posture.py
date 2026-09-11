@@ -171,6 +171,8 @@ def _direct_access(inv: Inventory, data_by_account: dict[tuple[str, str], list[s
             if label in DATA_LABELS:
                 targets = [dst]
             elif label == "CloudAccount":
+                if ACCESS_RANK.get(level, 0) < ACCESS_RANK["read"]:
+                    continue  # list/describe on the whole account is inventory visibility, not data access
                 scope = (e["props"].get("scope_labels") if e else None) or list(DATA_LABELS)
                 acct = inv.props(dst)["account_id"]
                 targets = [t for lbl in scope for t in data_by_account.get((acct, lbl), [])]

@@ -163,7 +163,7 @@ class InsightBuilder:
         g, ctx = self.g, self.ctx
         out: list[Insight] = []
         for ind, d in g.out_edges(alert_id, ("MATCHES_IOC",)):
-            via = d.get("via") or next((e for e, _ in g.out_edges(alert_id, ("INVOLVES",)) if g.has_edge(e, ind) if False), None)
+            via = d.get("via")
             entity = via if via and via in g else None
             if entity is None:
                 for e, _ in g.out_edges(alert_id, ("INVOLVES",)):

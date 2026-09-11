@@ -92,7 +92,7 @@ HOST_LINUX: dict[str, float] = {"openssh-server": 4, "sudo": 2, "linux-kernel": 
 HOST_WINDOWS: dict[str, float] = {"windows-print-spooler": 3, "windows-smb": 3}
 NODE_COMPONENTS: dict[str, float] = {"linux-kernel": 3, "containerd": 3, "runc": 2, "openssh-server": 1}
 
-VULN_RATE = 0.45
+VULN_RATE = 0.55
 
 
 def ecosystem_of(component: str, fallback: str) -> str:
@@ -162,11 +162,16 @@ def _storyline_packages(inv: Inventory) -> None:
     add_package(inv, sc.STG_EDGE_VM, "openssh-server", "9.8p1", "os", [])
     add_package(inv, sc.DEV_LOG4J_VM, "log4j-core", "2.14.1", "maven", ["CVE-2021-44228"])
     add_package(inv, sc.DEV_LOG4J_VM, "openssh-server", "9.6p1", "os", ["CVE-2024-6387"])
-    # patched sibling of stmt-render-2a
+    # patched sibling of stmt-render-2a (host and image)
     for vm in inv.ids("VirtualMachine"):
         if inv.name(vm) == "stmt-render-1a":
             add_package(inv, vm, "log4j-core", "2.17.1", "maven", [])
             add_package(inv, vm, "openssh-server", "9.8p1", "os", [])
+    if inv.has("image:ecr:larkspur/statement-render:3.8.2"):
+        add_package(inv, "image:ecr:larkspur/statement-render:3.8.2", "log4j-core", "2.17.1", "maven", [])
+        add_package(inv, "image:ecr:larkspur/statement-render:3.8.2", "jackson-databind", "2.17.2", "maven", [])
+        add_package(inv, "image:ecr:larkspur/statement-render:3.8.2", "openssl", "3.0.13", "os", [])
+        add_package(inv, "image:ecr:larkspur/statement-render:3.8.2", "glibc", "2.40", "os", [])
     add_package(inv, sc.BASTION_VM, "openssh-server", "9.6p1", "os", ["CVE-2024-6387"])
     add_package(inv, sc.BASTION_VM, "sudo", "1.9.15p5", "os", [])
     add_package(inv, sc.BASTION_VM, "linux-kernel", "6.1.94-99.176.amzn2023", "os", [])
@@ -207,16 +212,16 @@ def _image_packages(inv: Inventory, est: Estate) -> None:
         stack = meta["stack"]
         eco = STACK_ECOSYSTEM.get(stack, "os")
         pool = {k: v for k, v in STACK_COMPONENTS.get(stack, {}).items() if k not in RESTRICTED or stack in ("ingress", "redis")}
-        n_stack = r.choice([2, 2, 3, 3, 4]) if pool else 0
+        n_stack = r.choice([1, 2, 2, 3]) if pool else 0
         chosen = _weighted_sample(r, pool, n_stack)
         for comp in chosen:
             _component_package(inv, r, image_id, comp)
-        # base image packages
-        for comp in _weighted_sample(r, IMAGE_BASE, r.choice([1, 2])):
+        # base image package
+        for comp in _weighted_sample(r, IMAGE_BASE, 1):
             _component_package(inv, r, image_id, comp)
-        # fillers
+        # filler
         fillers = FILLER.get(eco, FILLER["os"])
-        for name, version in r.sample(fillers, min(len(fillers), r.choice([1, 1, 2]))):
+        for name, version in r.sample(fillers, 1):
             add_package(inv, image_id, name, version, eco, [])
         _update_image_counts(inv, image_id)
     _update_image_counts(inv, sc.EDGE_IMAGE)
