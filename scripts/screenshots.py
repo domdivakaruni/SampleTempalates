@@ -25,6 +25,22 @@ PAGES = [
 ]
 
 
+def _launch_options() -> dict:
+    """Use an explicitly configured or preinstalled Chromium when Playwright's own download is absent."""
+    import glob
+    import os
+
+    explicit = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+    if explicit:
+        return {"executable_path": explicit}
+    root = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+    for pattern in ("chromium-*/chrome-linux/chrome", "chromium_headless_shell-*/chrome-linux/headless_shell"):
+        matches = sorted(glob.glob(os.path.join(root, pattern)))
+        if matches:
+            return {"executable_path": matches[-1]}
+    return {}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8000")
@@ -36,7 +52,7 @@ def main() -> int:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(**_launch_options())
         page = browser.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
         for name, path in PAGES:
             page.goto(args.base + path, wait_until="networkidle")

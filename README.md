@@ -78,7 +78,17 @@ Decisions and trade-offs are recorded in [docs/02-architecture.md](docs/02-archi
 | Threat intel | Actors, campaigns, reports and the "exposed hosts with actively exploited vulnerabilities" table |
 | Analyst drawer | Chat with streaming answers, live tool calls, evidence highlighted on the canvas, cited node ids |
 
-Screenshots live in `docs/screenshots/`.
+Screenshots (captured from the running prototype on the simulated dataset):
+
+| Alert detail, graph context | Analyst drawer answering question 8 |
+|---|---|
+| ![Alert detail](docs/screenshots/alert-detail-graph-context.png) | ![Analyst drawer](docs/screenshots/analyst-drawer.png) |
+
+| Storyline kill chain | Threat-intel exposure table |
+|---|---|
+| ![Storyline](docs/screenshots/storyline-embercast.png) | ![Exposure](docs/screenshots/threat-intel-exposure.png) |
+
+The full set is in `docs/screenshots/`; regenerate them with `make screenshots` while `make serve` is running.
 
 ## Repository layout
 

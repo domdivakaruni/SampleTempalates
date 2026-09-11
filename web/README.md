@@ -52,7 +52,8 @@ src/
   api/          client.ts (typed fetch, transport selection, SSE), types.ts (mirror of throughline/models.py), hooks.ts (TanStack Query), sse.ts
   api/mock/     in-memory fixture graph and handlers for every endpoint (VITE_MOCK=1 / dev fallback); fixtures follow docs/04-storyline.md ids
   components/   shared UI: chips, tables, panels, storyline card/timeline, attack-path list, containment form/result, node details, analyst drawer
-  graph/        Cytoscape wrapper (GraphCanvas: setFragment / mergeFragment / highlight / focus / layout), styles, per-label SVG icons, layouts,
+  graph/        Cytoscape wrapper (GraphCanvas: setFragment / mergeFragment / highlight / focus / layout), styles, per-label SVG icons, layouts
+                (dagre LR for compact paths, fcose with the attack path pinned left-to-right for large storyline fragments), viewport helpers,
                 canvas host registration (highlight bus), canvas ops, context-menu actions, legend
   screens/      Dashboard, Alerts, AlertDetail, Storylines, StorylineDetail, Explorer, ThreatIntel (+ per-screen sub-components in folders)
   store/        zustand: canvasStore (evidence/highlight bus), drawerStore (chat session + streaming), selectionStore

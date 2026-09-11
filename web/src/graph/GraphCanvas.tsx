@@ -8,8 +8,8 @@ import { ContextMenu, type ContextAction } from './ContextMenu'
 import { fragmentElements, fragmentHighlightIds } from './elements'
 import { layoutForFragment, layoutOptions, primaryPath, type LayoutExtras, type LayoutName } from './layouts'
 import { graphStylesheet } from './styles'
+import { fitAll, fitToIds, focusNode, highlightElements, zoomBy } from './viewport'
 
-const MAX_FIT_ZOOM = 1.35
 let registered = false
 function ensureExtensions() {
   if (registered) return
@@ -83,39 +83,12 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     layout.run()
   }, [])
 
-  /**
-   * Fit the viewport to a set of element ids (the highlighted path) so long storyline chains stay legible.
-   * Needs at least two highlighted nodes and never zooms past MAX_FIT_ZOOM (a lone node would fill the canvas).
-   */
-  const fitTo = useCallback((ids: string[], padding = 60) => {
-    const cy = cyRef.current
-    if (!cy) return
-    const eles = cy.collection()
-    for (const id of ids) eles.merge(cy.getElementById(id))
-    if (eles.nodes().length < 2) return
-    const bb = eles.boundingBox({ includeLabels: true })
-    const w = Math.max(1, cy.width() - 2 * padding), h = Math.max(1, cy.height() - 2 * padding)
-    const zoom = Math.min(MAX_FIT_ZOOM, w / Math.max(1, bb.w), h / Math.max(1, bb.h))
-    const pan = { x: cy.width() / 2 - zoom * (bb.x1 + bb.w / 2), y: cy.height() / 2 - zoom * (bb.y1 + bb.h / 2) }
-    cy.animate({ zoom, pan, duration: 300, easing: 'ease-out' })
+  const fitTo = useCallback((ids: string[]) => {
+    if (cyRef.current) fitToIds(cyRef.current, ids)
   }, [])
 
   const applyHighlight = useCallback((ids: string[], dim = true, fit = true) => {
-    const cy = cyRef.current
-    if (!cy) return
-    const set = new Set(ids)
-    cy.batch(() => {
-      cy.elements().removeClass('highlight dim show-label')
-      if (!set.size) return
-      cy.elements().forEach((el) => {
-        if (set.has(el.id())) el.addClass(el.isEdge() ? 'highlight show-label' : 'highlight')
-        else if (dim) el.addClass('dim')
-      })
-    })
-    if (fit && set.size) {
-      const eles = cy.elements('.highlight')
-      if (eles.length) cy.animate({ fit: { eles, padding: 70 }, duration: 300, easing: 'ease-out' })
-    }
+    if (cyRef.current) highlightElements(cyRef.current, ids, dim, fit)
   }, [])
 
   useEffect(() => {
@@ -231,30 +204,14 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
         const cy = cyRef.current
         cy?.elements().removeClass('highlight dim show-label cut')
       },
-      focus: (id) => {
-        const cy = cyRef.current
-        if (!cy) return
-        const n = cy.getElementById(id)
-        if (!n.length) return
-        cy.nodes().removeClass('focus')
-        n.addClass('focus')
-        cy.animate({ center: { eles: n }, zoom: Math.max(cy.zoom(), 1.1), duration: 300, easing: 'ease-out' })
-      },
+      focus: (id) => cyRef.current && focusNode(cyRef.current, id),
       layout: (name) => {
         layoutRef.current = name
         setLayoutName(name)
         runLayout(name, true)
       },
-      fit: () => {
-        const cy = cyRef.current
-        if (cy?.nodes().length) cy.animate({ fit: { eles: cy.elements(), padding: 30 }, duration: 250 })
-      },
-      zoom: (factor) => {
-        const cy = cyRef.current
-        if (!cy) return
-        const w = cy.width(), h = cy.height()
-        cy.zoom({ level: cy.zoom() * factor, renderedPosition: { x: w / 2, y: h / 2 } })
-      },
+      fit: () => cyRef.current && fitAll(cyRef.current),
+      zoom: (factor) => cyRef.current && zoomBy(cyRef.current, factor),
       toggleLabels: (show) => {
         const next = show ?? !labelsRef.current
         labelsRef.current = next
@@ -309,12 +266,8 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
             cyRef.current?.nodes().toggleClass('nolabel', !next)
           }}
           onClear={() => cyRef.current?.elements().removeClass('highlight dim show-label cut')}
-          onFit={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 30 }, duration: 250 })}
-          onZoom={(f) => {
-            const cy = cyRef.current
-            if (!cy) return
-            cy.zoom({ level: cy.zoom() * f, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } })
-          }}
+          onFit={() => cyRef.current && fitAll(cyRef.current)}
+          onZoom={(f) => cyRef.current && zoomBy(cyRef.current, f)}
         />
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} node={menu.node} actions={contextActions?.(menu.node) ?? []} onClose={() => setMenu(null)} />}
