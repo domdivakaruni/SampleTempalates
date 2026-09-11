@@ -83,6 +83,7 @@ _TECHNIQUES: list[tuple[str, str, str]] = [
     ("T1558.003", "Steal or Forge Kerberos Tickets: Kerberoasting", "Credential Access"),
     ("T1621", "Multi-Factor Authentication Request Generation", "Credential Access"),
     ("T1555.003", "Credentials from Password Stores: Credentials from Web Browsers", "Credential Access"),
+    ("T1555.006", "Credentials from Password Stores: Cloud Secrets Management Stores", "Credential Access"),
     ("T1087.002", "Account Discovery: Domain Account", "Discovery"),
     ("T1018", "Remote System Discovery", "Discovery"),
     ("T1057", "Process Discovery", "Discovery"),

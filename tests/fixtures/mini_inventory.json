@@ -1,0 +1,484 @@
+{
+  "vms": [
+    {
+      "id": "vm:aws:i-0b4571e2c9a8f3d01",
+      "name": "bas-01",
+      "hostname": "bas-01.shared.larkspur.internal",
+      "private_ip": "10.20.0.15",
+      "public_ip": "198.51.100.10",
+      "os": "Amazon Linux 2023",
+      "os_family": "linux",
+      "account_id": "222222222222",
+      "environment": "prod",
+      "exposure": "internal",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-bas01",
+      "role_ids": [
+        "role:aws:222222222222:LarkspurBastionSSMRole"
+      ],
+      "app_id": null
+    },
+    {
+      "id": "vm:aws:i-0edge2a7f19c4b3e88",
+      "name": "stmt-render-2a",
+      "hostname": "stmt-render-2a.prod.larkspur.internal",
+      "private_ip": "10.10.3.24",
+      "public_ip": "198.51.100.24",
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "account_id": "111111111111",
+      "environment": "prod",
+      "exposure": "internet",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-edge2a",
+      "role_ids": [
+        "role:aws:111111111111:LarkspurStmtRenderRole"
+      ],
+      "app_id": "app:larkspur:statement-render"
+    },
+    {
+      "id": "vm:aws:i-0stg4e5f6a7b8c9d0e1",
+      "name": "stmt-render-stg-1",
+      "hostname": "stmt-render-stg-1.staging.larkspur.internal",
+      "private_ip": "10.30.3.24",
+      "public_ip": "198.51.100.64",
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "account_id": "333333333333",
+      "environment": "staging",
+      "exposure": "internet",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-stgedge1",
+      "role_ids": [],
+      "app_id": null
+    },
+    {
+      "id": "vm:aws:i-0dev8f9e0d1c2b3a4f5",
+      "name": "log4j-testbed",
+      "hostname": "log4j-testbed.dev.larkspur.internal",
+      "private_ip": "10.50.9.11",
+      "public_ip": "198.51.100.88",
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "account_id": "444444444444",
+      "environment": "dev",
+      "exposure": "internet",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-log4jtb",
+      "role_ids": [],
+      "app_id": null
+    },
+    {
+      "id": "vm:aws:i-0dev7c1a2b3c4d5e6f",
+      "name": "dev-sandbox-runner-03",
+      "hostname": "dev-sandbox-runner-03.dev.larkspur.internal",
+      "private_ip": "10.50.1.33",
+      "public_ip": null,
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "account_id": "444444444444",
+      "environment": "dev",
+      "exposure": "isolated",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-devrun03",
+      "role_ids": [],
+      "app_id": null
+    },
+    {
+      "id": "vm:aws:i-0scan9f8e7d6c5b4a3",
+      "name": "vulnscan-01",
+      "hostname": "vulnscan-01.shared.larkspur.internal",
+      "private_ip": "10.20.5.9",
+      "public_ip": null,
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "account_id": "222222222222",
+      "environment": "prod",
+      "exposure": "internal",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-scan01",
+      "role_ids": [],
+      "app_id": null
+    },
+    {
+      "id": "vm:aws:i-0file1a2b3c4d5e6f7",
+      "name": "srv-fileshare-01",
+      "hostname": "srv-fileshare-01.corp.larkspur.internal",
+      "private_ip": "10.60.2.20",
+      "public_ip": null,
+      "os": "Windows Server 2022",
+      "os_family": "windows",
+      "account_id": "666666666666",
+      "environment": "corp",
+      "exposure": "internal",
+      "has_edr_sensor": true,
+      "endpoint_id": "endpoint:falcon:aid-file01",
+      "role_ids": [],
+      "app_id": null
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "endpoint:falcon:aid-wks3391",
+      "hostname": "WKS-3391",
+      "device_type": "workstation",
+      "os": "Windows 11",
+      "os_family": "windows",
+      "private_ip": "10.40.12.77",
+      "primary_user_id": "user:okta:dwhitfield",
+      "vm_id": null,
+      "site": "Boston office"
+    },
+    {
+      "id": "endpoint:falcon:aid-bas01",
+      "hostname": "bas-01",
+      "device_type": "server",
+      "os": "Amazon Linux 2023",
+      "os_family": "linux",
+      "private_ip": "10.20.0.15",
+      "primary_user_id": null,
+      "vm_id": "vm:aws:i-0b4571e2c9a8f3d01",
+      "site": "aws-shared-services"
+    },
+    {
+      "id": "endpoint:falcon:aid-edge2a",
+      "hostname": "stmt-render-2a",
+      "device_type": "server",
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "private_ip": "10.10.3.24",
+      "primary_user_id": null,
+      "vm_id": "vm:aws:i-0edge2a7f19c4b3e88",
+      "site": "aws-prod"
+    },
+    {
+      "id": "endpoint:falcon:aid-devrun03",
+      "hostname": "dev-sandbox-runner-03",
+      "device_type": "server",
+      "os": "Ubuntu 22.04",
+      "os_family": "linux",
+      "private_ip": "10.50.1.33",
+      "primary_user_id": null,
+      "vm_id": "vm:aws:i-0dev7c1a2b3c4d5e6f",
+      "site": "aws-dev"
+    },
+    {
+      "id": "endpoint:falcon:aid-file01",
+      "hostname": "srv-fileshare-01",
+      "device_type": "server",
+      "os": "Windows Server 2022",
+      "os_family": "windows",
+      "private_ip": "10.60.2.20",
+      "primary_user_id": null,
+      "vm_id": "vm:aws:i-0file1a2b3c4d5e6f7",
+      "site": "aws-corp-it"
+    },
+    {
+      "id": "endpoint:falcon:aid-wks2210",
+      "hostname": "WKS-2210",
+      "device_type": "workstation",
+      "os": "Windows 11",
+      "os_family": "windows",
+      "private_ip": "10.40.9.21",
+      "primary_user_id": "user:okta:mreyes",
+      "vm_id": null,
+      "site": "New York office"
+    },
+    {
+      "id": "endpoint:falcon:aid-wks1042",
+      "hostname": "WKS-1042",
+      "device_type": "workstation",
+      "os": "macOS 14",
+      "os_family": "mac",
+      "private_ip": "10.40.7.5",
+      "primary_user_id": "user:okta:pkaur",
+      "vm_id": null,
+      "site": "New York office"
+    }
+  ],
+  "users": [
+    {
+      "id": "user:okta:dwhitfield",
+      "login": "dwhitfield",
+      "display_name": "Dana Whitfield",
+      "title": "Treasury Operations Analyst",
+      "department": "Finance",
+      "team_id": "team:larkspur:finance-treasury",
+      "is_privileged": false,
+      "is_executive": false,
+      "endpoint_id": "endpoint:falcon:aid-wks3391",
+      "location": "Boston"
+    },
+    {
+      "id": "user:okta:mreyes",
+      "login": "mreyes",
+      "display_name": "Marcus Reyes",
+      "title": "IT Systems Administrator",
+      "department": "Compliance/Risk",
+      "team_id": "team:larkspur:corp-it",
+      "is_privileged": true,
+      "is_executive": false,
+      "endpoint_id": "endpoint:falcon:aid-wks2210",
+      "location": "New York"
+    },
+    {
+      "id": "user:okta:pkaur",
+      "login": "pkaur",
+      "display_name": "Priya Kaur",
+      "title": "Chief Financial Officer",
+      "department": "Exec/Other",
+      "team_id": "team:larkspur:finance-treasury",
+      "is_privileged": true,
+      "is_executive": true,
+      "endpoint_id": "endpoint:falcon:aid-wks1042",
+      "location": "New York"
+    },
+    {
+      "id": "user:okta:jokafor",
+      "login": "jokafor",
+      "display_name": "Jide Okafor",
+      "title": "Platform Engineering Lead",
+      "department": "Engineering",
+      "team_id": "team:larkspur:platform-eng",
+      "is_privileged": true,
+      "is_executive": false,
+      "endpoint_id": null,
+      "location": "Austin"
+    },
+    {
+      "id": "user:okta:lchen",
+      "login": "lchen",
+      "display_name": "Lin Chen",
+      "title": "Statement-render Service Owner",
+      "department": "Engineering",
+      "team_id": "team:larkspur:payments-platform",
+      "is_privileged": false,
+      "is_executive": false,
+      "endpoint_id": null,
+      "location": "Remote"
+    }
+  ],
+  "roles": [
+    {
+      "id": "role:aws:222222222222:LarkspurBastionSSMRole",
+      "name": "LarkspurBastionSSMRole",
+      "account_id": "222222222222",
+      "arn": "arn:aws:iam::222222222222:role/LarkspurBastionSSMRole",
+      "role_type": "instance",
+      "attached_vm_ids": [
+        "vm:aws:i-0b4571e2c9a8f3d01"
+      ]
+    },
+    {
+      "id": "role:aws:111111111111:LarkspurProdDataReader",
+      "name": "LarkspurProdDataReader",
+      "account_id": "111111111111",
+      "arn": "arn:aws:iam::111111111111:role/LarkspurProdDataReader",
+      "role_type": "cross-account",
+      "attached_vm_ids": []
+    },
+    {
+      "id": "role:aws:111111111111:LarkspurStmtRenderRole",
+      "name": "LarkspurStmtRenderRole",
+      "account_id": "111111111111",
+      "arn": "arn:aws:iam::111111111111:role/LarkspurStmtRenderRole",
+      "role_type": "instance",
+      "attached_vm_ids": [
+        "vm:aws:i-0edge2a7f19c4b3e88"
+      ]
+    },
+    {
+      "id": "role:aws:666666666666:LarkspurCorpItAdmin",
+      "name": "LarkspurCorpItAdmin",
+      "account_id": "666666666666",
+      "arn": "arn:aws:iam::666666666666:role/LarkspurCorpItAdmin",
+      "role_type": "sso",
+      "attached_vm_ids": []
+    }
+  ],
+  "buckets": [
+    {
+      "id": "bucket:aws:larkspur-cardholder-vault",
+      "name": "larkspur-cardholder-vault",
+      "account_id": "111111111111",
+      "sensitivity": "critical",
+      "crown_jewel": true,
+      "public": false,
+      "data_classifications": [
+        "PCI"
+      ]
+    },
+    {
+      "id": "bucket:aws:larkspur-kyc-documents",
+      "name": "larkspur-kyc-documents",
+      "account_id": "111111111111",
+      "sensitivity": "high",
+      "crown_jewel": true,
+      "public": false,
+      "data_classifications": [
+        "PII"
+      ]
+    },
+    {
+      "id": "bucket:aws:larkspur-prod-app-config",
+      "name": "larkspur-prod-app-config",
+      "account_id": "111111111111",
+      "sensitivity": "high",
+      "crown_jewel": false,
+      "public": false,
+      "data_classifications": [
+        "SECRETS"
+      ]
+    },
+    {
+      "id": "bucket:aws:larkspur-statements-out",
+      "name": "larkspur-statements-out",
+      "account_id": "111111111111",
+      "sensitivity": "medium",
+      "crown_jewel": false,
+      "public": false,
+      "data_classifications": [
+        "PII"
+      ]
+    },
+    {
+      "id": "bucket:aws:larkspur-shared-logs",
+      "name": "larkspur-shared-logs",
+      "account_id": "222222222222",
+      "sensitivity": "low",
+      "crown_jewel": false,
+      "public": false,
+      "data_classifications": [
+        "INTERNAL"
+      ]
+    },
+    {
+      "id": "bucket:aws:larkspur-marketing-assets",
+      "name": "larkspur-marketing-assets",
+      "account_id": "666666666666",
+      "sensitivity": "none",
+      "crown_jewel": false,
+      "public": true,
+      "data_classifications": [
+        "PUBLIC"
+      ]
+    }
+  ],
+  "secrets": [
+    {
+      "id": "secret:aws:111111111111:prod/cardholder-db/reader",
+      "name": "prod/cardholder-db/reader",
+      "account_id": "111111111111",
+      "secret_type": "db_credentials",
+      "sensitivity": "critical"
+    },
+    {
+      "id": "secret:aws:111111111111:prod/hsm/partner-signing-key",
+      "name": "prod/hsm/partner-signing-key",
+      "account_id": "111111111111",
+      "secret_type": "signing_key",
+      "sensitivity": "critical"
+    }
+  ],
+  "databases": [
+    {
+      "id": "database:aws:111111111111:cardholder-db",
+      "name": "cardholder-db",
+      "account_id": "111111111111",
+      "engine": "postgres",
+      "sensitivity": "critical",
+      "crown_jewel": true,
+      "public": false,
+      "data_classifications": [
+        "PCI"
+      ]
+    }
+  ],
+  "apps": [
+    {
+      "id": "app:larkspur:card-issuing",
+      "name": "card-issuing",
+      "criticality": "tier-0"
+    },
+    {
+      "id": "app:larkspur:statement-render",
+      "name": "statement-render",
+      "criticality": "tier-1"
+    },
+    {
+      "id": "app:larkspur:marketing-site",
+      "name": "marketing-site",
+      "criticality": "tier-3"
+    },
+    {
+      "id": "app:larkspur:settlement-sftp",
+      "name": "settlement-sftp",
+      "criticality": "tier-2"
+    }
+  ],
+  "teams": [
+    {
+      "id": "team:larkspur:platform-eng",
+      "name": "platform-eng",
+      "department": "Engineering"
+    },
+    {
+      "id": "team:larkspur:payments-platform",
+      "name": "payments-platform",
+      "department": "Engineering"
+    },
+    {
+      "id": "team:larkspur:finance-treasury",
+      "name": "finance-treasury",
+      "department": "Finance"
+    },
+    {
+      "id": "team:larkspur:corp-it",
+      "name": "corp-it",
+      "department": "Compliance/Risk"
+    }
+  ],
+  "service_accounts": [
+    {
+      "id": "identity:linux:svc-finops-sftp",
+      "system": "linux",
+      "host_id": "endpoint:falcon:aid-bas01",
+      "purpose": "settlement-file SFTP",
+      "privileged": false
+    }
+  ],
+  "account_ids": [
+    "account:aws:111111111111",
+    "account:aws:222222222222",
+    "account:aws:333333333333",
+    "account:aws:444444444444",
+    "account:aws:555555555555",
+    "account:aws:666666666666",
+    "account:gcp:larkspur-ml-fraud",
+    "account:azure:7a1c9e2b-4d3f-4a8e-9b1c-2f3e4d5a6b7c"
+  ],
+  "storyline": {
+    "bastion_vm": "vm:aws:i-0b4571e2c9a8f3d01",
+    "bastion_endpoint": "endpoint:falcon:aid-bas01",
+    "bastion_role": "role:aws:222222222222:LarkspurBastionSSMRole",
+    "prod_reader_role": "role:aws:111111111111:LarkspurProdDataReader",
+    "edge_vm": "vm:aws:i-0edge2a7f19c4b3e88",
+    "edge_endpoint": "endpoint:falcon:aid-edge2a",
+    "edge_role": "role:aws:111111111111:LarkspurStmtRenderRole",
+    "wks_dana": "endpoint:falcon:aid-wks3391",
+    "user_dana": "user:okta:dwhitfield",
+    "svc_finops_sftp": "identity:linux:svc-finops-sftp",
+    "cardholder_vault": "bucket:aws:larkspur-cardholder-vault",
+    "kyc_docs": "bucket:aws:larkspur-kyc-documents",
+    "db_reader_secret": "secret:aws:111111111111:prod/cardholder-db/reader",
+    "hsm_secret": "secret:aws:111111111111:prod/hsm/partner-signing-key",
+    "cardholder_db": "database:aws:111111111111:cardholder-db",
+    "app_config_bucket": "bucket:aws:larkspur-prod-app-config",
+    "marketing_bucket": "bucket:aws:larkspur-marketing-assets",
+    "dev_sandbox_vm": "vm:aws:i-0dev7c1a2b3c4d5e6f",
+    "scanner_vm": "vm:aws:i-0scan9f8e7d6c5b4a3",
+    "fileshare_vm": "vm:aws:i-0file1a2b3c4d5e6f7",
+    "user_mreyes": "user:okta:mreyes",
+    "user_pkaur": "user:okta:pkaur"
+  }
+}

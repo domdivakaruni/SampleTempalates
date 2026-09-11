@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict, deque
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +105,35 @@ class ContextGraph:
     def set_node_props(self, node_id: str, **props: Any) -> None:
         self.G.nodes[node_id].update(props)
         self._search_index = None
+
+    def reload_from(self, other: ContextGraph) -> None:
+        """Replace this graph's contents with ``other``'s in place, so references held by other components
+        (analytics engine, stores) keep seeing one consistent graph after a rebuild."""
+        self.G = other.G
+        self._by_label = other._by_label
+        self._search_index = None
+        self.build_info = other.build_info
+
+    def remove_node_record(self, node_id: str) -> None:
+        """Remove a node and its edges (used by the enrichment pass to rebuild derived nodes idempotently)."""
+        if node_id not in self.G:
+            return
+        label = self.G.nodes[node_id].get("label")
+        self.G.remove_node(node_id)
+        if label in self._by_label:
+            self._by_label[label].discard(node_id)
+        self._search_index = None
+
+    def remove_edges(self, etype: str, where: Callable[[str, str, dict[str, Any]], bool] | None = None) -> int:
+        """Remove every edge of ``etype`` (optionally only those where ``where(src, dst, data)`` is true)."""
+        doomed = [
+            (u, v, k)
+            for u, v, k, d in self.G.edges(keys=True, data=True)
+            if d.get("type") == etype and (where is None or where(u, v, d))
+        ]
+        for u, v, k in doomed:
+            self.G.remove_edge(u, v, key=k)
+        return len(doomed)
 
     # ------------------------------------------------------------------ basic access
 

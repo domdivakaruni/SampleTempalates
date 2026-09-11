@@ -1,0 +1,81 @@
+# Contextual risk score weights and rails (docs/01 section 5.2, docs/06 section 3.2).
+# score = 100 * (severity_weight * S + context_weight * (wE*E + wP*P + wD*D + wT*T + wC*C)), then rails.
+
+severity_weight: 0.30
+context_weight: 0.70
+
+factor_weights:
+  exposure: 0.15
+  privilege: 0.20
+  data: 0.25
+  threat_intel: 0.20
+  correlation: 0.20
+
+# S: vendor severity
+severity:
+  informational: 0.10
+  low: 0.25
+  medium: 0.50
+  high: 0.75
+  critical: 1.00
+
+# E: exposure of the asset the alert sits on
+exposure:
+  internet: 1.0
+  public_ip_restricted: 0.6   # public IP but ingress restricted (bastion behind VPN CIDR)
+  internal: 0.4
+  isolated: 0.1
+  identity: 0.4               # alerts anchored on identities (roles, users)
+  unknown: 0.4
+
+# P: privilege reach, summed over what the asset's identity can reach (capped at 1.0)
+privilege:
+  admin: 1.0                  # any admin identity reachable
+  crown_jewel: 0.30
+  secret: 0.20
+  high_sensitivity_data: 0.20
+  other_data: 0.05
+  identity: 0.10
+  reach_depth: 4
+
+# D: data sensitivity reachable (max over reachable data holders)
+data:
+  classes: {PCI: 1.0, PHI: 1.0, PII: 1.0, SECRETS: 0.8, FINANCIAL: 0.7, INTERNAL: 0.5, PUBLIC: 0.0}
+  sensitivity: {critical: 0.8, high: 0.7, medium: 0.5, low: 0.3, none: 0.0}
+  indirect_factor: 0.8        # reached through a secret / credential store rather than direct access
+  reach_depth: 4
+
+# T: threat-intel relevance (max over components)
+threat_intel:
+  ioc_base: 0.5               # ioc value = confidence * (ioc_base + (1 - ioc_base) * actor relevance)
+  exploited_sector: 1.0       # active/mass exploitation and sector relevance >= booster threshold
+  exploited_other: 0.5
+  poc_public: 0.25
+  kev_only: 0.4
+  storyline_attribution_sector: 0.8
+  storyline_attribution_other: 0.5
+  ttp_overlap: 0.4            # scaled by actor relevance when overlap ratio >= 0.5
+
+# C: incident / storyline correlation
+correlation:
+  confirmed_path: 1.0
+  per_member: 0.15
+  member_cap: 0.9
+  per_stage: 0.02
+  per_related_alert: 0.1      # alerts on the same asset within 24h when no storyline exists
+  related_cap: 0.4
+
+rails:
+  attack_path_floor: 90
+  credential_pivot_bonus: 2
+  ti_booster_floor: 80
+  ti_booster_min_relevance: 0.7
+  no_context_ceiling: 25
+  no_context_thresholds: {data: 0.0, threat_intel: 0.1, privilege: 0.2}
+  benign_ceilings:
+    change_ticket: 35
+    known_scanner: 25
+    vpn_egress: 30
+    blocked_pre_execution: 20
+    test_file: 25
+    unmatched_exploit_attempt: 30
