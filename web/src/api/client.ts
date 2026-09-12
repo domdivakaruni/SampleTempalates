@@ -3,7 +3,9 @@
  *
  * Transport selection: the real backend at `/api/v1` is the default. The mock adapter (src/api/mock) is used when
  * `VITE_MOCK=1` is set at build time, when the URL carries `?mock=1`, or automatically in dev when `/api/v1/health`
- * is unreachable. The mock module is loaded lazily so production bundles do not pay for it.
+ * is unreachable. The snapshot adapter (src/api/snapshot, the static edition) is used when `VITE_STATIC=1` is set at
+ * build time or the URL carries `?snapshot=1`; it answers every request from precomputed JSON files. Both adapters are
+ * loaded lazily so production bundles do not pay for them.
  */
 import type {
   ActorDetailOut, ActorListOut, AlertContext, AlertListOut, AlertListParams, AlertOut, AlertsReachingJewelsOut,
@@ -39,16 +41,34 @@ export function isApiError(e: unknown): e is ApiError {
 
 // ----------------------------------------------------------------------------- transport mode
 
-export type ApiMode = 'real' | 'mock' | 'unknown'
+export type ApiMode = 'real' | 'mock' | 'snapshot' | 'unknown'
+
+/** True in the static snapshot edition (`VITE_STATIC=1 npm run build`): hash routing, relative assets, snapshot transport. */
+export const IS_STATIC_BUILD = import.meta.env.VITE_STATIC === '1'
+
+/** Read a `?flag=` parameter from the query string, or from inside the hash under hash routing (`#/path?flag=1`). */
+function locationFlag(name: string): string | null {
+  const fromSearch = new URLSearchParams(window.location.search).get(name)
+  if (fromSearch !== null) return fromSearch
+  const hashQuery = window.location.hash.split('?')[1]
+  return hashQuery ? new URLSearchParams(hashQuery).get(name) : null
+}
+
+/** `?flag=1` turns a mode on for the session, `?flag=0` turns it off again; the choice persists in sessionStorage. */
+function sessionFlag(name: string, storageKey: string): boolean {
+  const value = locationFlag(name)
+  if (value === '1') sessionStorage.setItem(storageKey, '1')
+  if (value === '0') sessionStorage.removeItem(storageKey)
+  return sessionStorage.getItem(storageKey) === '1'
+}
 
 function initialMode(): ApiMode {
+  if (IS_STATIC_BUILD) return 'snapshot'
   if (import.meta.env.VITE_MOCK === '1') return 'mock'
   if (typeof window !== 'undefined') {
     try {
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('mock') === '1') sessionStorage.setItem('throughline.mock', '1')
-      if (params.get('mock') === '0') sessionStorage.removeItem('throughline.mock')
-      if (sessionStorage.getItem('throughline.mock') === '1') return 'mock'
+      if (sessionFlag('snapshot', 'throughline.snapshot')) return 'snapshot'
+      if (sessionFlag('mock', 'throughline.mock')) return 'mock'
     } catch {
       /* storage unavailable */
     }
@@ -134,9 +154,17 @@ async function mockModule() {
   return import('./mock')
 }
 
+async function snapshotModule() {
+  return import('./snapshot')
+}
+
 export async function request<T>(method: 'GET' | 'POST', path: string, opts: { query?: Query; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
   const current = await resolveApiMode()
-  if (current === 'mock') {
+  if (current === 'snapshot') {
+    const m = await snapshotModule()
+    return m.snapshotRequest<T>(method, path, opts.query ?? {}, opts.body)
+  }
+  if (current === 'mock' && !IS_STATIC_BUILD) {
     const m = await mockModule()
     return m.mockRequest<T>(method, path, opts.query ?? {}, opts.body)
   }
@@ -157,7 +185,11 @@ const post = <T>(path: string, body?: unknown, query?: Query, signal?: AbortSign
 /** Stream a chat turn; resolves when the stream ends. Events are delivered in order through `onEvent`. */
 export async function streamChat(sessionId: string, body: ChatMessageIn, onEvent: (evt: ChatEvent) => void, signal?: AbortSignal): Promise<void> {
   const current = await resolveApiMode()
-  if (current === 'mock') {
+  if (current === 'snapshot') {
+    const m = await snapshotModule()
+    return m.snapshotStream(sessionId, body, onEvent, signal)
+  }
+  if (current === 'mock' && !IS_STATIC_BUILD) {
     const m = await mockModule()
     return m.mockStream(sessionId, body, onEvent, signal)
   }

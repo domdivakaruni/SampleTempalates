@@ -4,7 +4,7 @@ PIP ?= .venv/bin/pip
 DATA ?= data/generated
 PORT ?= 8000
 
-.PHONY: help setup data db web serve dev demo test test-fast lint screenshots ask clean clean-data
+.PHONY: help setup data db web serve dev demo test test-fast lint screenshots snapshot ask static static-check clean clean-data
 
 help:
 	@echo "make setup        create .venv, install python deps (+ web deps)"
@@ -16,6 +16,9 @@ help:
 	@echo "make test         run the python test suite (unit, conformance, api, scenarios)"
 	@echo "make ask Q='...'  ask the analyst a question from the command line"
 	@echo "make screenshots  capture UI screenshots into docs/screenshots"
+	@echo "make snapshot     precompute the static-edition payloads into web/snapshot-out (docs/10)"
+	@echo "make static       export the snapshot + build the no-backend static edition into web/dist-static"
+	@echo "make static-check serve web/dist-static and run the Playwright verification (web/scripts/check-static.mjs)"
 
 setup:
 	test -d .venv || python3 -m venv .venv
@@ -59,8 +62,18 @@ ask:
 screenshots:
 	$(PY) scripts/screenshots.py
 
+snapshot:
+	$(PY) scripts/export_snapshot.py --out web/snapshot-out
+
+# Static snapshot edition (docs/10-static-snapshot.md). STATIC_ARGS=--export forces a fresh export.
+static:
+	bash scripts/build_static.sh $(STATIC_ARGS)
+
+static-check:
+	cd web && node scripts/check-static.mjs --dir dist-static
+
 clean:
-	rm -rf web/dist .pytest_cache .ruff_cache
+	rm -rf web/dist web/dist-static .pytest_cache .ruff_cache
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
 
 clean-data:

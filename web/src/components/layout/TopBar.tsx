@@ -38,6 +38,11 @@ export function TopBar() {
             Mock data
           </span>
         )}
+        {mode === 'snapshot' && (
+          <span className="chip border-accent/40 bg-accent/10 text-accent" title="Static edition (VITE_STATIC=1): every payload was precomputed from the simulated graph; no backend, no query engine, the analyst replays prepared answers">
+            Static edition
+          </span>
+        )}
         {health.data && (
           <span className="hidden items-center gap-1 text-[11px] text-fg-3 lg:flex" title={`backend ${health.data.backend}, agent ${health.data.agent_mode}${health.data.model ? ` (${health.data.model})` : ''}`}>
             <span className={cn('h-1.5 w-1.5 rounded-full', health.data.status === 'ok' ? 'bg-cat-endpoint' : 'bg-sev-critical')} />

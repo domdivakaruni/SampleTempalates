@@ -28,7 +28,7 @@ docs/05-api-contract.md and `web/src/api/types.ts`; the exporter serialises pyda
 | `manifest.json` | `{version: 1, generated_at, seed, node_count, edge_count, alert_count, shards: {alert_details: [file...], edges: [file...]}, notes: string}` |
 | `meta.json` | `{health: HealthOut (backend "snapshot", agent_mode "offline", analyst_mode "precomputed"), stats: StatsOut (backend "snapshot", capabilities.cypher false), schema: SchemaOut (registry view from GET /schema incl. example_queries if available), dashboard: DashboardOut}` |
 | `alerts.json` | `{items: AlertSummary[]}` every alert, in contextual order (the adapter re-sorts/filters/pages client-side exactly like the mock adapter's `alertsList`) |
-| `alert_details/<NN>.json` | `{ "<alert id>": {alert: AlertSummary, flat_view: object, risk: RiskBreakdown, insights: Insight[], context?: AlertContext} }`; shard key = first two hex chars of sha1(alert id); ~16 shards. `context` (the full `GET /alerts/{id}/context` payload) is included for: every storyline member, the top 400 alerts by contextual score, every alert in `ALERT_N`/`QUARANTINE_ALERT_IDS`, and every alert that is a `rerank_examples` entry; other alerts have no `context` key and the adapter synthesises a lite context (section 3). Evidence fragments inside contexts are capped at 150 nodes / 400 edges (the engine already does this) |
+| `alert_details/<NN>.json` | `{ "<alert id>": {alert: AlertSummary, flat_view: object, risk: RiskBreakdown, insights: Insight[], context?: AlertContext} }`; shard key = the first hex char(s) of sha1(alert id): one char by default (16 shards, so the whole tree stays under the artifact publisher's 255-file limit; `manifest.alert_shard_prefix_len` says which), two with `--alert-shard-chars 2`. `context` (the full `GET /alerts/{id}/context` payload) is included for: every storyline member, the top 400 alerts by contextual score, every alert in `ALERT_N`/`QUARANTINE_ALERT_IDS`, and every alert that is a `rerank_examples` entry; other alerts have no `context` key and the adapter synthesises a lite context (section 3). Evidence fragments inside contexts are capped at 150 nodes / 400 edges (the engine already does this) |
 | `storylines.json` | `{items: StorylineOut[] (no fragment), details: { "<id>": StorylineOut (with fragment) }}` |
 | `ti.json` | `{actors: ActorListOut, actor_details: {id: ActorDetailOut}, campaign_details: {id: object (GET /threat-intel/campaigns/{id})}, reports: ReportListOut, report_details: {id: ReportDetailOut}, exposure: {sector_only: ExposureOut, all: ExposureOut}, lookups: { "<lower-cased value>": TIContext } }` where lookups cover every storyline indicator value (hashes, IPs, domain, url), every CVE id with an EXPLOITS edge, every actor/campaign/report id and name (lower-cased), and the ATT&CK technique ids used by the two storylines |
 | `investigate.json` | `{credential_joins: CredentialJoinsOut, alerts_reaching_crown_jewels: { "": default, "<jewel id>": ... for each crown-jewel bucket/database }, medium_alerts_with_data_path: { "medium|falcon": ..., "medium|": ..., "high|falcon": ..., "low|falcon": ... }, identity_footprint: { "<id>": BlastRadiusResult } for every IamRole/IamUser/HumanUser/Credential that is a storyline member or has is_admin/privilege_score >= 0.7 (cap 60), containment: [ {targets: string[], actions: string[], result: ContainmentSimulation} ] for: storyline A defaults ([EP_BASTION, BASTION_ROLE] x {[isolate_endpoint, rotate_role_credentials], [isolate_endpoint, rotate_role_credentials, tighten_trust_policy], [isolate_endpoint], [rotate_role_credentials]}), [EP_BASTION, BASTION_VM, BASTION_ROLE] with the same action sets, storyline B ([EP_EDGE, EDGE_ROLE] and [EP_EDGE, EDGE_VM, EDGE_ROLE] x the same sets), and the storyline B endpoint alone }` |
@@ -99,3 +99,32 @@ Verification: `python -m http.server` on `web/dist-static` and a Playwright pass
 `#/alerts/alert:falcon:ldt-a009?tab=graph`, `#/storylines/storyline:derived:embercast-larkspur`,
 `#/explorer?id=endpoint:falcon:aid-bas01`, `#/threat-intel?tab=exposure`, and an analyst question, with zero page
 errors and zero failed requests.
+
+## 5. Result (first build, 2026-09-12)
+
+| Item | Value |
+|---|---|
+| Export (`scripts/export_snapshot.py`, real API in-process over the NetworkX store) | 59 s; 32 data files, 59.4 MB |
+| Static site (`web/dist-static`) | 40 files, 59 MB; web bundle 1.4 MB (snapshot transport is a 25 KB lazy chunk) |
+| Alerts | 1,666 summaries, 57 with the full API context (13 storyline members, the named noise and quarantine alerts, the rerank examples, and the top 39 by contextual score); the rest open with the lite context |
+| Analyst answers | 122 (12 global demo questions, 8 storyline, 102 alert-level = 6 for each storyline and named-noise alert); 264 suggestion contexts |
+| Graph | `graph/nodes.json` 11.2 MB with typed props, three edge shards (7.4 MB), 178 blast-radius roots, 23 attack-path keys (13 storyline alerts, anchors, 5 `internet->jewel`), 204 node cards, 229 TI lookups, 60 identity footprints, 17 containment simulations |
+| Trim ladder that fired | typed props only (153 MB) -> blank props on fragment nodes inside analytics payloads (125 MB) -> node-level chat answers dropped (122 MB) -> top contexts reduced from 400 to 39 (59.4 MB) |
+| Verification | `web/scripts/check-snapshot-routes.mjs` (60+ routes through the real adapter, no browser) and `web/scripts/check-static.mjs` (Playwright: routes, badge, replayed answer, fallback answer, zero page errors / failed requests) both pass; `tests/unit/test_export_snapshot.py` checks shapes, sharding and coverage in 29 s |
+
+Decisions taken at integration time:
+
+- **Budget 60 MB instead of 50 MB.** The mandatory coverage alone (all alert details, the node table, the edges, the
+  crown-jewel tables and identity footprints, TI, search) is about 51 MB after every shape-preserving trim, and the
+  artifact publisher's ceiling is 64 MB per version, so the fit budget is 60 MB and the exporter reports both numbers
+  in `manifest.budget`.
+- **16 alert-detail shards by default** (`--alert-shard-chars 1`): 256 shards put the tree over the publisher's
+  255-files-per-publish limit; 16 shards of 0.5-1 MB are also fewer requests for the browser.
+- **U+FFFD escaped in the static bundle.** micromark emits a literal replacement character inside a template
+  literal and the publisher rejects files containing it; a `generateBundle` hook in `web/vite.config.ts` rewrites
+  it to the `\uFFFD` escape after minification (a `renderChunk` rewrite is folded back by the minifier).
+- **Props blanked on fragment nodes** inside analytics payloads is invisible to the UI: the node details panel reads
+  from `node_cards.json`, and the adapter re-hydrates fragment props from the cards or the loaded graph when present.
+
+Published: the private Claude artifact (shared from its share menu) and GitHub Pages at
+<https://domdivakaruni.github.io/SampleTempalates/> (the `pages` workflow, on every push).

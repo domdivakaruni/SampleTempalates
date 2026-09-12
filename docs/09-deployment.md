@@ -55,6 +55,34 @@ In the Render dashboard choose **New > Blueprint**, point it at this repository 
 service (Docker runtime, health check, 2 GB plan). Render asks for `DEMO_PASSWORD` and `ANTHROPIC_API_KEY` on the
 first deploy and redeploys on every push to the branch.
 
+## Option 0: the static edition (no server at all)
+
+When the goal is "let the team click around", the cheapest deployment is no server: `scripts/build_static.sh`
+exports every payload the UI can ask for from the real API (in-process, NetworkX store, offline analyst) into
+`web/snapshot-out/`, builds the UI with `VITE_STATIC=1` (relative asset URLs, hash routing, the snapshot transport
+instead of HTTP) and copies both into `web/dist-static/` (40 files, about 59 MB, of which 57 MB is data). That folder
+is served by:
+
+- **GitHub Pages**: the `pages` workflow builds the dataset, the export and the UI on every push and deploys
+  `web/dist-static` to <https://domdivakaruni.github.io/SampleTempalates/>. Pages must be enabled with "GitHub
+  Actions" as the source (Settings -> Pages); the workflow asks for that automatically and the deploy job's log says
+  whether it succeeded.
+- **A Claude artifact** (private link, shareable from the page's share menu): `scripts/make_artifact_html.py` turns
+  the built `index.html` into the fragment the artifact publisher expects; the `assets/` and `snapshot/` files are
+  published alongside it. The static build escapes the one literal U+FFFD character the markdown renderer ships
+  (the publisher rejects it) and keeps the tree under the publisher's 255-file limit by using 16 alert-detail shards.
+- Any web server or bucket: `python3 -m http.server -d web/dist-static 4174`, an S3/GCS bucket with static website
+  hosting, Netlify, Vercel, etc. Nothing is root-absolute, so a sub-path works.
+
+What is different from the container: the analyst replays 122 prepared answers (the twelve demo questions, the
+storyline questions, six questions per storyline alert) and answers anything else with a short explanation and the
+questions it can answer; the Cypher console returns "not available in the static edition"; alerts outside the top
+set open with a lighter context computed in the browser (neighbourhood, approximate blast radius, related alerts)
+and say so; blast radius and paths for arbitrary nodes are approximated by a client-side search over the full graph
+(21k nodes / 81k edges, loaded on demand). Everything on the storyline pages, the dashboard, threat intel and the
+twelve demo questions is the exact API output. `make static-check` runs a Playwright pass over the built site
+(routes, the badge, a replayed answer, zero page errors) and is the acceptance test.
+
 ## Option 4: the prebuilt image (no cloud account needed)
 
 The `docker` GitHub Actions workflow builds the image on every push, smoke-tests it (health, password gate, UI) and

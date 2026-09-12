@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# static snapshot edition (scripts/build_static.sh): exporter output and the static site
+dist-static
+snapshot-out
 *.local
 
 # Editor directories and files

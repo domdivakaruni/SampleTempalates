@@ -21,15 +21,21 @@ def main(argv: list[str]) -> int:
         print("index.html has no head/body", file=sys.stderr)
         return 1
     head_html, body_html = head.group(1), body.group(1)
-    keep = []
-    for tag in re.findall(r"<(?:title|link|script|style)\b[^>]*>(?:.*?</(?:title|script|style)>)?", head_html, re.S | re.I):
+    keep: list[str] = []
+    # One pattern per tag kind: void tags (<link>) must not swallow the elements that follow them.
+    tag_re = re.compile(
+        r"<title\b[^>]*>.*?</title>|<style\b[^>]*>.*?</style>|<script\b[^>]*>.*?</script>|<link\b[^>]*>",
+        re.S | re.I,
+    )
+    for tag in tag_re.findall(head_html):
         low = tag.lower()
         if low.startswith("<link") and "stylesheet" not in low and "modulepreload" not in low:
             continue  # favicons etc. are not needed inside the artifact
         keep.append(tag.strip())
+    if not any(t.lower().startswith("<title") for t in keep):
+        keep.insert(0, "<title>Throughline</title>")
     fragment = "\n".join(keep) + "\n" + body_html.strip() + "\n"
     fragment = fragment.replace('"./', '"').replace("'./", "'")  # relative without the leading ./
-    fragment = fragment.replace("<title>", "<title>", 1)
     out.write_text(fragment, encoding="utf-8")
     print(f"wrote {out} ({out.stat().st_size} bytes)")
     return 0

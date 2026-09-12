@@ -55,16 +55,29 @@ To use Claude as the analyst instead of the deterministic playbooks, set `ANTHRO
 
 ## Share it with the team
 
-The whole prototype ships as one container with the dataset baked in (`Dockerfile`). Run it anywhere that gives you
-an HTTPS URL and set `DEMO_PASSWORD` so the link is not open to the world:
+Three ways, from zero setup to a real deployment:
 
-```bash
-gcloud run deploy throughline --source . --region us-central1 --memory 2Gi --allow-unauthenticated \
-  --set-env-vars DEMO_USER=team,DEMO_PASSWORD='pick-a-strong-one'
-```
+1. **The static edition (no server at all).** Every payload the UI needs is precomputed from the simulated graph and
+   shipped as plain files with the web bundle, so the whole prototype runs from any static host. It is published as a
+   private Claude artifact (share it from the page's share menu) and deployed to GitHub Pages by the `pages`
+   workflow on every push: <https://domdivakaruni.github.io/SampleTempalates/>. Rebuild it locally with
+   `make static` (about 70 seconds) and verify it with `make static-check`. The dashboard, alerts, storylines,
+   explorer, threat intel and the analyst all work; the analyst replays 122 prepared answers (all twelve demo
+   questions, the storyline questions and six questions per storyline alert) and explains itself on anything else,
+   and the Cypher console is disabled. Details in [docs/10-static-snapshot.md](docs/10-static-snapshot.md).
+2. **The prebuilt container (full product, one command).** The `docker` workflow publishes the image to GitHub
+   Container Registry on every push; anyone with Docker runs
+   `docker run --rm -p 8000:8000 -e DEMO_PASSWORD=throughline ghcr.io/domdivakaruni/sampletempalates:claude-exciting-babbage-exn48g`.
+3. **A hosted deployment.** The same container runs anywhere that gives you an HTTPS URL; set `DEMO_PASSWORD` so
+   the link is not open to the world:
 
-Fly.io (`fly.toml`), Render (`render.yaml`), `docker compose up`, and a prebuilt image on GitHub Container Registry are
-covered in [docs/09-deployment.md](docs/09-deployment.md).
+   ```bash
+   gcloud run deploy throughline --source . --region us-central1 --memory 2Gi --allow-unauthenticated \
+     --set-env-vars DEMO_USER=team,DEMO_PASSWORD='pick-a-strong-one'
+   ```
+
+   Fly.io (`fly.toml`), Render (`render.yaml`) and `docker compose up` are covered in
+   [docs/09-deployment.md](docs/09-deployment.md).
 
 ## Architecture in one picture
 
@@ -142,6 +155,7 @@ data/fixtures/          small committed fixture graphs; data/generated is built 
 7. [Agent and API notes](docs/07-agent-and-api.md): how the analyst works, safety, using the tool API from your own agent.
 8. [Critique log](docs/08-critique-log.md): the review rounds after the first build and what changed.
 9. [Deployment](docs/09-deployment.md): container image, Cloud Run, Fly.io, Render, the prebuilt image, password gate.
+10. [Static snapshot edition](docs/10-static-snapshot.md): the no-backend build (exporter, snapshot transport, GitHub Pages and artifact publishing) and what it can and cannot do.
 
 ## Configuration
 

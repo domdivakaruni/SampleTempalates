@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { IS_STATIC_BUILD } from './api/client'
 import { Shell } from './components/layout/Shell'
 import { AlertDetail } from './screens/AlertDetail'
 import { Alerts } from './screens/Alerts'
@@ -8,6 +9,9 @@ import { Explorer } from './screens/Explorer'
 import { StorylineDetail } from './screens/StorylineDetail'
 import { Storylines } from './screens/Storylines'
 import { ThreatIntel } from './screens/ThreatIntel'
+
+// The static edition is served from plain files (GitHub Pages, an artifact origin), so routes live in the hash.
+const Router = IS_STATIC_BUILD ? HashRouter : BrowserRouter
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,7 +22,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <Router>
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Dashboard />} />
@@ -31,7 +35,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </Router>
     </QueryClientProvider>
   )
 }
