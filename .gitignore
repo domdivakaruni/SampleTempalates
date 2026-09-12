@@ -1,0 +1,33 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+web/node_modules/
+web/dist/
+web/dist-static/
+web/snapshot-out/
+web/.vite/
+npm-debug.log*
+
+# Generated data and databases (regenerate with `make data`)
+data/generated/
+data/graph.kuzu/
+data/graph.kuzu.wal
+*.kuzu/
+*.kuzu.wal
+
+# Local config
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

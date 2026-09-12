@@ -1,0 +1,16 @@
+from throughline.schema.registry import (  # noqa: F401
+    CATEGORIES,
+    COMMON_EDGE_COLUMNS,
+    COMMON_NODE_COLUMNS,
+    EDGE_TYPES,
+    LABELS,
+    Column,
+    EdgeType,
+    NodeLabel,
+    category_of,
+    edge_type,
+    label,
+    label_for_id,
+    validate_edge,
+    validate_node,
+)

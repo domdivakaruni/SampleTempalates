@@ -1,0 +1,94 @@
+name: pages
+
+# Builds the static snapshot edition (no backend; every payload precomputed from the simulated graph) on every push
+# and deploys it to GitHub Pages. Enabling Pages is a one-time manual step (Settings -> Pages -> Source: "GitHub
+# Actions"): the workflow token is not allowed to create the Pages site itself, so until that is done the deploy is
+# skipped with a notice and the built site is attached to the run as the `throughline-static` artifact instead.
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # The static edition lands in stages; skip cleanly on commits that do not carry the build script yet.
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.probe.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: probe
+        run: |
+          if [ -f scripts/build_static.sh ] && [ -f scripts/export_snapshot.py ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; else echo "ready=false" >> "$GITHUB_OUTPUT"; echo "static build scripts not present on this commit; nothing to deploy"; fi
+  build:
+    needs: check
+    if: needs.check.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      pages_enabled: ${{ steps.pages_enabled.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --quiet --upgrade pip
+          .venv/bin/pip install --quiet -e .
+          cd web && npm ci --no-audit --no-fund
+      - name: Build the dataset and the static snapshot edition
+        run: bash scripts/build_static.sh --export
+      - name: Attach the static site to this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: throughline-static
+          path: web/dist-static
+          retention-days: 14
+      - name: Is GitHub Pages enabled for this repository?
+        id: pages_enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages")
+          if [ "$code" = "200" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=GitHub Pages is not enabled (HTTP $code)::Enable it once under Settings -> Pages with 'GitHub Actions' as the source, then re-run this workflow. Until then the built site is attached to this run as the 'throughline-static' artifact (serve it with: python3 -m http.server -d dist-static 4174)."
+          fi
+      - name: Configure Pages
+        if: steps.pages_enabled.outputs.enabled == 'true'
+        uses: actions/configure-pages@v5
+      - name: Upload site
+        if: steps.pages_enabled.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist-static
+  deploy:
+    needs: [check, build]
+    if: needs.check.outputs.ready == 'true' && needs.build.outputs.pages_enabled == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

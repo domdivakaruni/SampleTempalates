@@ -1,0 +1,21 @@
+# Render blueprint: connect the repository in the Render dashboard ("New +" -> "Blueprint") and it deploys this
+# service from the Dockerfile; set DEMO_PASSWORD (and optionally ANTHROPIC_API_KEY) when prompted.
+services:
+  - type: web
+    name: throughline-demo
+    runtime: docker
+    plan: standard   # 2 GB RAM; the graph projection needs about 1 GB
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: AGENT_MODE
+        value: auto
+      - key: DEMO_USER
+        value: team
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

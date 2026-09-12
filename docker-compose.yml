@@ -1,0 +1,19 @@
+# Local one-liner: `docker compose up --build` then open http://127.0.0.1:8000 (user "team", password below).
+services:
+  throughline:
+    build: .
+    image: throughline:local
+    ports:
+      - "8000:8000"
+    environment:
+      DEMO_USER: team
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-throughline-demo}
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}   # uncomment to use Claude as the analyst
+      AGENT_MODE: auto
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+    restart: unless-stopped

@@ -1,0 +1,31 @@
+# Fly.io: `fly launch --copy-config --no-deploy` (pick a name and region), then
+# `fly secrets set DEMO_PASSWORD=... ANTHROPIC_API_KEY=...` and `fly deploy`.
+app = "throughline-demo"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  API_HOST = "0.0.0.0"
+  PORT = "8000"
+  AGENT_MODE = "auto"
+  DEMO_USER = "team"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/api/v1/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
