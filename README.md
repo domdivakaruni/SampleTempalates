@@ -69,7 +69,7 @@ Three ways, from zero setup to a real deployment:
    and the Cypher console is disabled. Details in [docs/10-static-snapshot.md](docs/10-static-snapshot.md).
 2. **The prebuilt container (full product, one command).** The `docker` workflow publishes the image to GitHub
    Container Registry on every push; anyone with Docker runs
-   `docker run --rm -p 8000:8000 -e DEMO_PASSWORD=throughline ghcr.io/domdivakaruni/sampletempalates:claude-exciting-babbage-exn48g`.
+   `docker run --rm -p 8000:8000 -e DEMO_PASSWORD=throughline ghcr.io/domdivakaruni/sampletempalates:latest`.
 3. **A hosted deployment.** The same container runs anywhere that gives you an HTTPS URL; set `DEMO_PASSWORD` so
    the link is not open to the world:
 

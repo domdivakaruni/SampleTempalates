@@ -90,7 +90,7 @@ The `docker` GitHub Actions workflow builds the image on every push, smoke-tests
 publishes it to GitHub Container Registry. Anyone on the team with Docker can run:
 
 ```bash
-docker run --rm -p 8000:8000 -e DEMO_PASSWORD=throughline ghcr.io/domdivakaruni/sampletempalates:claude-exciting-babbage-exn48g
+docker run --rm -p 8000:8000 -e DEMO_PASSWORD=throughline ghcr.io/domdivakaruni/sampletempalates:latest
 # open http://127.0.0.1:8000  (user team / password throughline)
 ```
 
