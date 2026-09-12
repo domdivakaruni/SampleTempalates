@@ -36,6 +36,9 @@ throughline = "throughline.cli:main"
 [tool.setuptools.packages.find]
 include = ["throughline*"]
 
+[tool.setuptools.package-data]
+throughline = ["**/*.yaml", "**/*.yml", "**/*.json", "**/*.cypher", "**/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

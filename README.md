@@ -53,6 +53,19 @@ To use Claude as the analyst instead of the deterministic playbooks, set `ANTHRO
 7. Open **Storylines > EMBERCAST**, run the containment simulation (isolate the bastion, rotate the role): what is cut, what breaks, what residual risk remains.
 8. Open **Graph Explorer > Cypher** and run one of the schema's example queries against the embedded graph database.
 
+## Share it with the team
+
+The whole prototype ships as one container with the dataset baked in (`Dockerfile`). Run it anywhere that gives you
+an HTTPS URL and set `DEMO_PASSWORD` so the link is not open to the world:
+
+```bash
+gcloud run deploy throughline --source . --region us-central1 --memory 2Gi --allow-unauthenticated \
+  --set-env-vars DEMO_USER=team,DEMO_PASSWORD='pick-a-strong-one'
+```
+
+Fly.io (`fly.toml`), Render (`render.yaml`), `docker compose up`, and a prebuilt image on GitHub Container Registry are
+covered in [docs/09-deployment.md](docs/09-deployment.md).
+
 ## Architecture in one picture
 
 ```mermaid
@@ -127,6 +140,8 @@ data/fixtures/          small committed fixture graphs; data/generated is built 
 5. [API and tool contract](docs/05-api-contract.md): REST endpoints, SSE events, the analyst tool set.
 6. [Build plan](docs/06-build-plan.md): module ownership and interfaces.
 7. [Agent and API notes](docs/07-agent-and-api.md): how the analyst works, safety, using the tool API from your own agent.
+8. [Critique log](docs/08-critique-log.md): the review rounds after the first build and what changed.
+9. [Deployment](docs/09-deployment.md): container image, Cloud Run, Fly.io, Render, the prebuilt image, password gate.
 
 ## Configuration
 

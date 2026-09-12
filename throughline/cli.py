@@ -27,8 +27,10 @@ def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     settings = _settings()
+    import os
+
     host = args.host or settings.api_host
-    port = args.port or settings.api_port
+    port = args.port or (int(os.environ["PORT"]) if os.environ.get("PORT", "").isdigit() else 0) or settings.api_port
     uvicorn.run("throughline.api.app:create_app", factory=True, host=host, port=port, reload=bool(args.reload), log_level=settings.log_level.lower())
     return 0
 

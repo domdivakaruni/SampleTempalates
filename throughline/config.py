@@ -35,10 +35,16 @@ class Settings(BaseSettings):
     agent_enable_fallbacks: bool = True
 
     # --- serving ---
-    api_host: str = "127.0.0.1"
-    api_port: int = 8000
+    api_host: str = "127.0.0.1"  # containers set API_HOST=0.0.0.0
+    api_port: int = 8000  # the PORT variable injected by Cloud Run / Render / Fly / Heroku-style hosts wins when set
     log_level: str = "info"
     web_dist: Path = REPO_ROOT / "web" / "dist"
+    # Optional shared password for hosted demos: when set, every route except the health check requires HTTP basic
+    # auth (user DEMO_USER, password DEMO_PASSWORD). Good enough to keep a demo URL off the open internet; not a
+    # substitute for real authentication.
+    demo_password: str | None = None
+    demo_user: str = "team"
+    public_url: str | None = None  # extra allowed CORS origin for a hosted UI on another domain
 
     # --- limits ---
     max_fragment_nodes: int = 300

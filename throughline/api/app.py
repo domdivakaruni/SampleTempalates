@@ -78,9 +78,16 @@ def create_app(
     app.state.settings = settings
     app.state.runtime = _initial_runtime(settings, graph, store, engine, registry, analyst)
 
+    demo_password = getattr(settings, "demo_password", None)
+    if demo_password:
+        from throughline.api.auth import DemoPasswordMiddleware
+
+        app.add_middleware(DemoPasswordMiddleware, user=getattr(settings, "demo_user", "team"), password=demo_password)
+        log.info("demo password gate enabled (user %r)", getattr(settings, "demo_user", "team"))
+    extra_origins = [o for o in [getattr(settings, "public_url", None)] if o]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"],
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000", *extra_origins],
         allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_credentials=True,
         allow_methods=["*"],
