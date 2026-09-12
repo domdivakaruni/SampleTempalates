@@ -64,9 +64,10 @@ instead of HTTP) and copies both into `web/dist-static/` (40 files, about 59 MB,
 is served by:
 
 - **GitHub Pages**: the `pages` workflow builds the dataset, the export and the UI on every push and deploys
-  `web/dist-static` to <https://domdivakaruni.github.io/SampleTempalates/>. Pages must be enabled with "GitHub
-  Actions" as the source (Settings -> Pages); the workflow asks for that automatically and the deploy job's log says
-  whether it succeeded.
+  `web/dist-static` to <https://domdivakaruni.github.io/SampleTempalates/>. Pages has to be switched on once by a
+  repository admin (Settings -> Pages -> Source: "GitHub Actions"); the workflow token is not allowed to do that
+  itself, so until then the deploy job is skipped with a notice and the built site is attached to every run as the
+  `throughline-static` artifact (download, unzip, `python3 -m http.server -d dist-static 4174`).
 - **A Claude artifact** (private link, shareable from the page's share menu): `scripts/make_artifact_html.py` turns
   the built `index.html` into the fragment the artifact publisher expects; the `assets/` and `snapshot/` files are
   published alongside it. The static build escapes the one literal U+FFFD character the markdown renderer ships

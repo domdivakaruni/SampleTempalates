@@ -59,8 +59,10 @@ Three ways, from zero setup to a real deployment:
 
 1. **The static edition (no server at all).** Every payload the UI needs is precomputed from the simulated graph and
    shipped as plain files with the web bundle, so the whole prototype runs from any static host. It is published as a
-   private Claude artifact (share it from the page's share menu) and deployed to GitHub Pages by the `pages`
-   workflow on every push: <https://domdivakaruni.github.io/SampleTempalates/>. Rebuild it locally with
+   private Claude artifact (share it from the page's share menu), and the `pages` workflow deploys it to GitHub Pages
+   on every push at <https://domdivakaruni.github.io/SampleTempalates/> once Pages is switched on (one-time:
+   Settings -> Pages -> Source "GitHub Actions"; until then the workflow attaches the built site to each run as the
+   `throughline-static` artifact). Rebuild it locally with
    `make static` (about 70 seconds) and verify it with `make static-check`. The dashboard, alerts, storylines,
    explorer, threat intel and the analyst all work; the analyst replays 122 prepared answers (all twelve demo
    questions, the storyline questions and six questions per storyline alert) and explains itself on anything else,

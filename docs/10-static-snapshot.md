@@ -126,5 +126,6 @@ Decisions taken at integration time:
 - **Props blanked on fragment nodes** inside analytics payloads is invisible to the UI: the node details panel reads
   from `node_cards.json`, and the adapter re-hydrates fragment props from the cards or the loaded graph when present.
 
-Published: the private Claude artifact (shared from its share menu) and GitHub Pages at
-<https://domdivakaruni.github.io/SampleTempalates/> (the `pages` workflow, on every push).
+Published: the private Claude artifact (shared from its share menu); GitHub Pages at
+<https://domdivakaruni.github.io/SampleTempalates/> follows as soon as Pages is enabled for the repository (the
+`pages` workflow builds on every push, attaches the site to the run, and deploys when Pages is on).
