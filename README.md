@@ -158,6 +158,7 @@ data/fixtures/          small committed fixture graphs; data/generated is built 
 8. [Critique log](docs/08-critique-log.md): the review rounds after the first build and what changed.
 9. [Deployment](docs/09-deployment.md): container image, Cloud Run, Fly.io, Render, the prebuilt image, password gate.
 10. [Static snapshot edition](docs/10-static-snapshot.md): the no-backend build (exporter, snapshot transport, GitHub Pages and artifact publishing) and what it can and cannot do.
+11. [Why a graph? The benefits, measured](docs/11-graph-benefits.md): the twelve questions answered with and without a graph (SQL over the graph tables, SQL over the raw vendor feeds, the embedded graph database), with timings, work, query size and agreement.
 
 ## Configuration
 
