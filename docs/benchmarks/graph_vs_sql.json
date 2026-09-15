@@ -1,0 +1,1138 @@
+{
+ "data": "/home/user/SampleTempalates/data/generated",
+ "runs": 5,
+ "duckdb": "1.5.5",
+ "sizes": {
+  "1": {
+   "nodes": 21394,
+   "edges": 80622,
+   "moves_graph": 14129,
+   "moves_sql": 14129,
+   "graph_load_ms": 843,
+   "graph_index_ms": 640,
+   "sql_load_ms": 636,
+   "sql_index_ms": 53,
+   "raw_load_ms": 736,
+   "threads": 4
+  },
+  "3": {
+   "nodes": 64180,
+   "edges": 241866,
+   "moves_graph": 42387,
+   "moves_sql": 42387,
+   "graph_load_ms": 2343,
+   "graph_index_ms": 1818,
+   "sql_load_ms": 1590,
+   "sql_index_ms": 85,
+   "raw_load_ms": null,
+   "threads": 4
+  },
+  "10": {
+   "nodes": 213931,
+   "edges": 806220,
+   "moves_graph": 141290,
+   "moves_sql": 141290,
+   "graph_load_ms": 7918,
+   "graph_index_ms": 5758,
+   "sql_load_ms": 5056,
+   "sql_index_ms": 158,
+   "raw_load_ms": null,
+   "threads": 4
+  }
+ },
+ "rows": [
+  {
+   "q": "Q1",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "nodes": 19,
+    "crown_jewels": 3,
+    "regulated": 3,
+    "product_reach_jaccard": 1.0
+   },
+   "work": 20,
+   "query_chars": 39,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q1",
+   "tier": "sql-norm",
+   "ms": 10.92,
+   "answer": {
+    "nodes": 19,
+    "agrees_with_graph": 1.0
+   },
+   "work": 46659,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q1",
+   "tier": "sql-raw",
+   "ms": 780.36,
+   "answer": {
+    "nodes": 19,
+    "coverage_of_graph_reach": 1.0,
+    "extra_nodes": 0
+   },
+   "work": null,
+   "query_chars": 5059,
+   "note": "reconstructs every join from the vendor feeds inside the query",
+   "replicate": 1
+  },
+  {
+   "q": "Q4",
+   "tier": "graph",
+   "ms": 0.0,
+   "answer": {
+    "nodes": 7,
+    "crown_jewels": 3
+   },
+   "work": 8,
+   "query_chars": 20,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q4",
+   "tier": "sql-norm",
+   "ms": 6.26,
+   "answer": {
+    "nodes": 7,
+    "agrees_with_graph": 1.0
+   },
+   "work": 15245,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q4",
+   "tier": "sql-raw",
+   "ms": 475.76,
+   "answer": {
+    "nodes": 7,
+    "coverage_of_graph_reach": 1.0
+   },
+   "work": null,
+   "query_chars": 5059,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q2",
+   "tier": "graph",
+   "ms": 0.82,
+   "answer": {
+    "roots": 173,
+    "alerts_with_path": 29,
+    "storyline_a_included": 2
+   },
+   "work": 2288,
+   "query_chars": 57,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q2",
+   "tier": "sql-norm",
+   "ms": 27.35,
+   "answer": {
+    "roots": 173,
+    "alerts_with_path": 29,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 394,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q6",
+   "tier": "graph",
+   "ms": 6.73,
+   "answer": {
+    "alerts": 1666,
+    "alerts_reaching_jewels": 486,
+    "a009_jewels": 3,
+    "top3": [
+     [
+      "alert:cspm:iss-1168",
+      36
+     ],
+     [
+      "alert:falcon:ldt-g011",
+      23
+     ],
+     [
+      "alert:falcon:ldt-g034",
+      23
+     ]
+    ]
+   },
+   "work": 16427,
+   "query_chars": 53,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q6",
+   "tier": "sql-norm",
+   "ms": 71.69,
+   "answer": {
+    "alerts": 1666,
+    "alerts_reaching_jewels": 486,
+    "a009_jewels": 3,
+    "agreement": 1.0
+   },
+   "work": null,
+   "query_chars": 394,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q10",
+   "tier": "graph",
+   "ms": 0.15,
+   "answer": {
+    "alerts": 61,
+    "a009_included": true
+   },
+   "work": 234,
+   "query_chars": 38,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q10",
+   "tier": "sql-norm",
+   "ms": 11.32,
+   "answer": {
+    "alerts": 61,
+    "agrees_with_graph": 1.0
+   },
+   "work": 66566,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q7",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "hops": 6,
+    "path": [
+     "alert:falcon:ldt-a001",
+     "endpoint:falcon:aid-wks3391",
+     "endpoint:falcon:aid-bas01",
+     "vm:aws:i-0b4571e2c9a8f3d01",
+     "role:aws:222222222222:LarkspurBastionSSMRole",
+     "role:aws:111111111111:LarkspurProdDataReader",
+     "bucket:aws:larkspur-cardholder-vault"
+    ]
+   },
+   "work": 24,
+   "query_chars": 42,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q7",
+   "tier": "sql-norm",
+   "ms": 23.04,
+   "answer": {
+    "hops": 6,
+    "same_length_as_graph": true,
+    "path": [
+     "alert:falcon:ldt-a001",
+     "endpoint:falcon:aid-wks3391",
+     "endpoint:falcon:aid-bas01",
+     "vm:aws:i-0b4571e2c9a8f3d01",
+     "role:aws:222222222222:LarkspurBastionSSMRole",
+     "role:aws:111111111111:LarkspurProdDataReader",
+     "bucket:aws:larkspur-cardholder-vault"
+    ]
+   },
+   "work": null,
+   "query_chars": 305,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q12",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "reach_before": 23,
+    "reach_after": 2,
+    "jewels_before": 3,
+    "jewels_after": 0
+   },
+   "work": null,
+   "query_chars": 70,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q12",
+   "tier": "sql-norm",
+   "ms": 19.99,
+   "answer": {
+    "reach_before": 23,
+    "reach_after": 2,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 516,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q3",
+   "tier": "graph",
+   "ms": 0.07,
+   "answer": {
+    "event_alert_pairs": 9,
+    "events": 3,
+    "alerts": 3
+   },
+   "work": null,
+   "query_chars": 90,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q3",
+   "tier": "sql-raw",
+   "ms": 6.98,
+   "answer": {
+    "event_alert_pairs": 9,
+    "events": 3,
+    "alerts": 3
+   },
+   "work": null,
+   "query_chars": 742,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q5",
+   "tier": "graph",
+   "ms": 0.67,
+   "answer": {
+    "hosts": 5,
+    "includes_stmt_render_2a": true
+   },
+   "work": null,
+   "query_chars": 75,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q5",
+   "tier": "sql-raw",
+   "ms": 4.46,
+   "answer": {
+    "hosts": 5,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 799,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q8",
+   "tier": "graph",
+   "ms": 0.04,
+   "answer": {
+    "credentials": 1,
+    "ids": [
+     "credential:aws:ASIA5LARKBASTION01Q7"
+    ]
+   },
+   "work": null,
+   "query_chars": 65,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q8",
+   "tier": "sql-raw",
+   "ms": 3.34,
+   "answer": {
+    "credentials": 1,
+    "ids": [
+     "credential:aws:ASIA5LARKBASTION01Q7"
+    ],
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 474,
+   "note": "raw feeds carry no stolen-credential record; the join goes through the instance id in the assumed-role session",
+   "replicate": 1
+  },
+  {
+   "q": "Q9",
+   "tier": "graph",
+   "ms": 1.66,
+   "answer": {
+    "ioc_hits": 21,
+    "endpoints_touched": 1,
+    "ttp_alerts": 129,
+    "report_techniques": 21
+   },
+   "work": null,
+   "query_chars": 101,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q9",
+   "tier": "sql-raw",
+   "ms": 5.07,
+   "answer": {
+    "ioc_hits": 12,
+    "endpoints_touched": 1,
+    "endpoints_agree": 1.0,
+    "ttp_alerts": 129,
+    "ttp_alerts_agree": true,
+    "report_techniques": 21
+   },
+   "work": null,
+   "query_chars": 1006,
+   "note": "ioc_hits count raw matches (rows), the graph counts matched entities; endpoints touched and technique matches are the comparable answers",
+   "replicate": 1
+  },
+  {
+   "q": "Q11",
+   "tier": "graph",
+   "ms": 0.22,
+   "answer": {
+    "public": true,
+    "classes": [
+     "PUBLIC"
+    ],
+    "sensitivity": "none",
+    "alerts_that_can_reach_it": 74,
+    "internet_can_reach": false
+   },
+   "work": null,
+   "query_chars": 45,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q11",
+   "tier": "sql-norm",
+   "ms": 12.46,
+   "answer": {
+    "public": "true",
+    "classes": "[\"PUBLIC\"]",
+    "sensitivity": "none",
+    "alerts_that_can_reach_it": 74
+   },
+   "work": null,
+   "query_chars": 419,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q1",
+   "tier": "graph-db",
+   "ms": 11.23,
+   "answer": {
+    "rows": 10,
+    "coverage_of_graph_answer": 0.526,
+    "extra": 0
+   },
+   "work": null,
+   "query_chars": 152,
+   "note": "forward-only variable-length pattern; Cypher cannot mix directions inside one path expression",
+   "replicate": 1
+  },
+  {
+   "q": "Q4",
+   "tier": "graph-db",
+   "ms": 9.12,
+   "answer": {
+    "rows": 7,
+    "coverage_of_graph_answer": 1.0,
+    "extra": 0
+   },
+   "work": null,
+   "query_chars": 112,
+   "note": "forward-only variable-length pattern; Cypher cannot mix directions inside one path expression",
+   "replicate": 1
+  },
+  {
+   "q": "Q5",
+   "tier": "graph-db",
+   "ms": 3.75,
+   "answer": {
+    "rows": 5,
+    "coverage_of_graph_answer": 1.0,
+    "extra": 0
+   },
+   "work": null,
+   "query_chars": 216,
+   "note": "",
+   "replicate": 1
+  },
+  {
+   "q": "Q10",
+   "tier": "graph-db",
+   "ms": 8.44,
+   "answer": {
+    "rows": 14,
+    "coverage_of_graph_answer": 0.23,
+    "extra": 0
+   },
+   "work": null,
+   "query_chars": 166,
+   "note": "forward-only variable-length pattern; Cypher cannot mix directions inside one path expression",
+   "replicate": 1
+  },
+  {
+   "q": "Q1",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "nodes": 19,
+    "crown_jewels": 3,
+    "regulated": 3,
+    "product_reach_jaccard": 1.0
+   },
+   "work": 20,
+   "query_chars": 39,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q1",
+   "tier": "sql-norm",
+   "ms": 14.05,
+   "answer": {
+    "nodes": 19,
+    "agrees_with_graph": 1.0
+   },
+   "work": 139363,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q4",
+   "tier": "graph",
+   "ms": 0.0,
+   "answer": {
+    "nodes": 7,
+    "crown_jewels": 3
+   },
+   "work": 8,
+   "query_chars": 20,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q4",
+   "tier": "sql-norm",
+   "ms": 7.5,
+   "answer": {
+    "nodes": 7,
+    "agrees_with_graph": 1.0
+   },
+   "work": 45591,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q2",
+   "tier": "graph",
+   "ms": 3.13,
+   "answer": {
+    "roots": 519,
+    "alerts_with_path": 87,
+    "storyline_a_included": 2
+   },
+   "work": 6864,
+   "query_chars": 57,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q2",
+   "tier": "sql-norm",
+   "ms": 61.16,
+   "answer": {
+    "roots": 519,
+    "alerts_with_path": 87,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 394,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q6",
+   "tier": "graph",
+   "ms": 27.96,
+   "answer": {
+    "alerts": 4998,
+    "alerts_reaching_jewels": 1458,
+    "a009_jewels": 3,
+    "top3": [
+     [
+      "alert:cspm:iss-1168",
+      36
+     ],
+     [
+      "alert:cspm:iss-1168~1",
+      36
+     ],
+     [
+      "alert:cspm:iss-1168~2",
+      36
+     ]
+    ]
+   },
+   "work": 49281,
+   "query_chars": 53,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q6",
+   "tier": "sql-norm",
+   "ms": 184.47,
+   "answer": {
+    "alerts": 4998,
+    "alerts_reaching_jewels": 1458,
+    "a009_jewels": 3,
+    "agreement": 1.0
+   },
+   "work": null,
+   "query_chars": 394,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q10",
+   "tier": "graph",
+   "ms": 0.16,
+   "answer": {
+    "alerts": 61,
+    "a009_included": true
+   },
+   "work": 234,
+   "query_chars": 38,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q10",
+   "tier": "sql-norm",
+   "ms": 17.67,
+   "answer": {
+    "alerts": 61,
+    "agrees_with_graph": 1.0
+   },
+   "work": 194716,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q7",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "hops": 6,
+    "path": [
+     "alert:falcon:ldt-a001",
+     "endpoint:falcon:aid-wks3391",
+     "endpoint:falcon:aid-bas01",
+     "vm:aws:i-0b4571e2c9a8f3d01",
+     "role:aws:222222222222:LarkspurBastionSSMRole",
+     "role:aws:111111111111:LarkspurProdDataReader",
+     "bucket:aws:larkspur-cardholder-vault"
+    ]
+   },
+   "work": 24,
+   "query_chars": 42,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q7",
+   "tier": "sql-norm",
+   "ms": 43.77,
+   "answer": {
+    "hops": 6,
+    "same_length_as_graph": true,
+    "path": [
+     "alert:falcon:ldt-a001",
+     "endpoint:falcon:aid-wks3391",
+     "endpoint:falcon:aid-bas01",
+     "vm:aws:i-0b4571e2c9a8f3d01",
+     "role:aws:222222222222:LarkspurBastionSSMRole",
+     "role:aws:111111111111:LarkspurProdDataReader",
+     "bucket:aws:larkspur-cardholder-vault"
+    ]
+   },
+   "work": null,
+   "query_chars": 305,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q12",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "reach_before": 23,
+    "reach_after": 2,
+    "jewels_before": 3,
+    "jewels_after": 0
+   },
+   "work": null,
+   "query_chars": 70,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q12",
+   "tier": "sql-norm",
+   "ms": 33.43,
+   "answer": {
+    "reach_before": 23,
+    "reach_after": 2,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 516,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q3",
+   "tier": "graph",
+   "ms": 0.06,
+   "answer": {
+    "event_alert_pairs": 9,
+    "events": 3,
+    "alerts": 3
+   },
+   "work": null,
+   "query_chars": 90,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q5",
+   "tier": "graph",
+   "ms": 2.18,
+   "answer": {
+    "hosts": 15,
+    "includes_stmt_render_2a": true
+   },
+   "work": null,
+   "query_chars": 75,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q8",
+   "tier": "graph",
+   "ms": 0.08,
+   "answer": {
+    "credentials": 3,
+    "ids": [
+     "credential:aws:ASIA5LARKBASTION01Q7",
+     "credential:aws:ASIA5LARKBASTION01Q7~1",
+     "credential:aws:ASIA5LARKBASTION01Q7~2"
+    ]
+   },
+   "work": null,
+   "query_chars": 65,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q9",
+   "tier": "graph",
+   "ms": 6.94,
+   "answer": {
+    "ioc_hits": 63,
+    "endpoints_touched": 3,
+    "ttp_alerts": 387,
+    "report_techniques": 21
+   },
+   "work": null,
+   "query_chars": 101,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q11",
+   "tier": "graph",
+   "ms": 0.24,
+   "answer": {
+    "public": true,
+    "classes": [
+     "PUBLIC"
+    ],
+    "sensitivity": "none",
+    "alerts_that_can_reach_it": 74,
+    "internet_can_reach": false
+   },
+   "work": null,
+   "query_chars": 45,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q11",
+   "tier": "sql-norm",
+   "ms": 20.45,
+   "answer": {
+    "public": "true",
+    "classes": "[\"PUBLIC\"]",
+    "sensitivity": "none",
+    "alerts_that_can_reach_it": 74
+   },
+   "work": null,
+   "query_chars": 419,
+   "note": "",
+   "replicate": 3
+  },
+  {
+   "q": "Q1",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "nodes": 19,
+    "crown_jewels": 3,
+    "regulated": 3,
+    "product_reach_jaccard": 1.0
+   },
+   "work": 20,
+   "query_chars": 39,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q1",
+   "tier": "sql-norm",
+   "ms": 21.6,
+   "answer": {
+    "nodes": 19,
+    "agrees_with_graph": 1.0
+   },
+   "work": 503582,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q4",
+   "tier": "graph",
+   "ms": 0.0,
+   "answer": {
+    "nodes": 7,
+    "crown_jewels": 3
+   },
+   "work": 8,
+   "query_chars": 20,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q4",
+   "tier": "sql-norm",
+   "ms": 10.67,
+   "answer": {
+    "nodes": 7,
+    "agrees_with_graph": 1.0
+   },
+   "work": 167352,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q2",
+   "tier": "graph",
+   "ms": 12.26,
+   "answer": {
+    "roots": 1730,
+    "alerts_with_path": 290,
+    "storyline_a_included": 2
+   },
+   "work": 22880,
+   "query_chars": 57,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q2",
+   "tier": "sql-norm",
+   "ms": 113.17,
+   "answer": {
+    "roots": 1730,
+    "alerts_with_path": 290,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 394,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q6",
+   "tier": "graph",
+   "ms": 105.47,
+   "answer": {
+    "alerts": 16660,
+    "alerts_reaching_jewels": 4860,
+    "a009_jewels": 3,
+    "top3": [
+     [
+      "alert:cspm:iss-1168",
+      36
+     ],
+     [
+      "alert:cspm:iss-1168~1",
+      36
+     ],
+     [
+      "alert:cspm:iss-1168~2",
+      36
+     ]
+    ]
+   },
+   "work": 164270,
+   "query_chars": 53,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q6",
+   "tier": "sql-norm",
+   "ms": 529.34,
+   "answer": {
+    "alerts": 16660,
+    "alerts_reaching_jewels": 4860,
+    "a009_jewels": 3,
+    "agreement": 1.0
+   },
+   "work": null,
+   "query_chars": 394,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q10",
+   "tier": "graph",
+   "ms": 0.17,
+   "answer": {
+    "alerts": 61,
+    "a009_included": true
+   },
+   "work": 234,
+   "query_chars": 38,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q10",
+   "tier": "sql-norm",
+   "ms": 31.64,
+   "answer": {
+    "alerts": 61,
+    "agrees_with_graph": 1.0
+   },
+   "work": 660456,
+   "query_chars": 258,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q7",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "hops": 6,
+    "path": [
+     "alert:falcon:ldt-a001",
+     "endpoint:falcon:aid-wks3391",
+     "endpoint:falcon:aid-bas01",
+     "vm:aws:i-0b4571e2c9a8f3d01",
+     "role:aws:222222222222:LarkspurBastionSSMRole",
+     "role:aws:111111111111:LarkspurProdDataReader",
+     "bucket:aws:larkspur-cardholder-vault"
+    ]
+   },
+   "work": 24,
+   "query_chars": 42,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q7",
+   "tier": "sql-norm",
+   "ms": 70.82,
+   "answer": {
+    "hops": 6,
+    "same_length_as_graph": true,
+    "path": [
+     "alert:falcon:ldt-a001",
+     "endpoint:falcon:aid-wks3391",
+     "endpoint:falcon:aid-bas01",
+     "vm:aws:i-0b4571e2c9a8f3d01",
+     "role:aws:222222222222:LarkspurBastionSSMRole",
+     "role:aws:111111111111:LarkspurProdDataReader",
+     "bucket:aws:larkspur-cardholder-vault"
+    ]
+   },
+   "work": null,
+   "query_chars": 305,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q12",
+   "tier": "graph",
+   "ms": 0.01,
+   "answer": {
+    "reach_before": 23,
+    "reach_after": 2,
+    "jewels_before": 3,
+    "jewels_after": 0
+   },
+   "work": null,
+   "query_chars": 70,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q12",
+   "tier": "sql-norm",
+   "ms": 72.58,
+   "answer": {
+    "reach_before": 23,
+    "reach_after": 2,
+    "agrees_with_graph": 1.0
+   },
+   "work": null,
+   "query_chars": 516,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q3",
+   "tier": "graph",
+   "ms": 0.06,
+   "answer": {
+    "event_alert_pairs": 9,
+    "events": 3,
+    "alerts": 3
+   },
+   "work": null,
+   "query_chars": 90,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q5",
+   "tier": "graph",
+   "ms": 10.35,
+   "answer": {
+    "hosts": 50,
+    "includes_stmt_render_2a": true
+   },
+   "work": null,
+   "query_chars": 75,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q8",
+   "tier": "graph",
+   "ms": 0.28,
+   "answer": {
+    "credentials": 10,
+    "ids": [
+     "credential:aws:ASIA5LARKBASTION01Q7",
+     "credential:aws:ASIA5LARKBASTION01Q7~1",
+     "credential:aws:ASIA5LARKBASTION01Q7~2",
+     "credential:aws:ASIA5LARKBASTION01Q7~3",
+     "credential:aws:ASIA5LARKBASTION01Q7~4",
+     "credential:aws:ASIA5LARKBASTION01Q7~5",
+     "credential:aws:ASIA5LARKBASTION01Q7~6",
+     "credential:aws:ASIA5LARKBASTION01Q7~7",
+     "credential:aws:ASIA5LARKBASTION01Q7~8",
+     "credential:aws:ASIA5LARKBASTION01Q7~9"
+    ]
+   },
+   "work": null,
+   "query_chars": 65,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q9",
+   "tier": "graph",
+   "ms": 35.67,
+   "answer": {
+    "ioc_hits": 210,
+    "endpoints_touched": 10,
+    "ttp_alerts": 1290,
+    "report_techniques": 21
+   },
+   "work": null,
+   "query_chars": 101,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q11",
+   "tier": "graph",
+   "ms": 0.24,
+   "answer": {
+    "public": true,
+    "classes": [
+     "PUBLIC"
+    ],
+    "sensitivity": "none",
+    "alerts_that_can_reach_it": 74,
+    "internet_can_reach": false
+   },
+   "work": null,
+   "query_chars": 45,
+   "note": "",
+   "replicate": 10
+  },
+  {
+   "q": "Q11",
+   "tier": "sql-norm",
+   "ms": 48.69,
+   "answer": {
+    "public": "true",
+    "classes": "[\"PUBLIC\"]",
+    "sensitivity": "none",
+    "alerts_that_can_reach_it": 74
+   },
+   "work": null,
+   "query_chars": 419,
+   "note": "",
+   "replicate": 10
+  }
+ ]
+}
